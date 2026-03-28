@@ -63,6 +63,9 @@
   .stop-btn{width:100%;max-width:300px;font-family:"JetBrains Mono",monospace;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#ff5252;background:none;border:2px solid #ff5252;border-radius:10px;padding:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.15s,color 0.15s}
   .stop-btn:active{background:#ff5252;color:var(--bg)}
   .ctrl-note{font-size:9px;color:#3a3a42;text-align:center;max-width:260px;line-height:1.5}
+  .weight-row{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
+  .weight-input{font-family:"JetBrains Mono",monospace;font-size:14px;font-weight:700;color:var(--text);background:var(--border);border:none;border-radius:6px;padding:6px 10px;width:64px;text-align:center;-webkit-appearance:none;appearance:none}
+  .weight-input:focus{outline:1px solid var(--accent)}
 
   /* ── Tabs ── */
   .tabs{display:flex;background:var(--bg);border-top:1px solid var(--border);flex-shrink:0}
@@ -165,6 +168,12 @@
       </div>
     </div>
     <button class="stop-btn" onclick="stopTreadmill()">Stop</button>
+    <div class="ctrl-divider"></div>
+    <div class="weight-row">
+      <span>Weight</span>
+      <input class="weight-input" id="weight-input" type="number" min="30" max="250" step="1" value="70">
+      <span>kg</span>
+    </div>
     <div class="ctrl-note">Speed ±0.5 &nbsp;·&nbsp; Incline ±0.5%</div>
   </div>
 </div>
@@ -182,6 +191,7 @@
 </div>
 
 <script>
+var userWeightKg = parseFloat(localStorage.getItem("weightKg") || "70");
 var FTMS = 0x1826, TDATA = 0x2ACD, FTMS_CP = 0x2AD9;
 var RSC = 0x1814, RSC_MEAS = 0x2A53;
 var dev = null, st = null, ti = null, cpChar = null;
@@ -254,7 +264,7 @@ function onD(e) {
     var spdMpm = lastSk * 1000 / 60;
     var gradeDec = (lastInc || 0) / 100;
     var vo2 = 0.2 * spdMpm + 0.9 * spdMpm * gradeDec + 3.5;
-    calAccum += vo2 * 0.35 * dtMin;
+    calAccum += vo2 * (userWeightKg * 5 / 1000) * dtMin;
   }
   lastDataTime = now;
 
@@ -396,6 +406,19 @@ function uT() {
   var m = Math.floor(e / 60), s = e % 60;
   document.getElementById("tm").textContent = String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
 }
+
+// Weight input
+var wInput = document.getElementById("weight-input");
+wInput.value = userWeightKg;
+wInput.addEventListener("change", function() {
+  var v = parseFloat(this.value);
+  if (!isNaN(v) && v >= 30 && v <= 250) {
+    userWeightKg = v;
+    localStorage.setItem("weightKg", v);
+  } else {
+    this.value = userWeightKg;
+  }
+});
 
 // Desktop popup launcher
 function launchPopup(pw, ph) {
