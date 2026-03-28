@@ -117,7 +117,7 @@
 </div>
 
 <script>
-var FTMS = 0x1826, TDATA = 0x2ACD, RSC = 0x1814, RSC_MEAS = 0x2A53;
+var FTMS = 0x1826, TDATA = 0x2ACD;
 var dev = null, st = null, ti = null;
 var useMetric = false;
 var lastSk = 0, lastDk = null, lastInc = null;
@@ -140,19 +140,13 @@ cb.addEventListener("click", async function() {
   cb.textContent = "Connecting...";
   cb.disabled = true;
   try {
-    dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [FTMS] }], optionalServices: [RSC] });
+    dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [FTMS] }] });
     dev.addEventListener("gattserverdisconnected", onDC);
     var srv = await dev.gatt.connect();
     var svc = await srv.getPrimaryService(FTMS);
     var ch = await svc.getCharacteristic(TDATA);
     await ch.startNotifications();
     ch.addEventListener("characteristicvaluechanged", onD);
-    try {
-      var rscSvc = await srv.getPrimaryService(RSC);
-      var rscCh = await rscSvc.getCharacteristic(RSC_MEAS);
-      await rscCh.startNotifications();
-      rscCh.addEventListener("characteristicvaluechanged", onRSC);
-    } catch(x) {}
     ov.classList.add("hidden");
     dt.classList.add("on");
     ft.classList.remove("hidden");
@@ -206,13 +200,6 @@ function render(sk, dk, inc) {
     var s = inc > 0 ? "+" : "";
     document.getElementById("gv").textContent = s + inc.toFixed(1) + "%";
   }
-}
-
-// Parse RSC cadence data (strides/min → steps/min)
-function onRSC(e) {
-  var d = e.target.value;
-  var cadence = d.getUint8(3) * 2; // strides/min * 2 = steps/min
-  document.getElementById("cadv").textContent = cadence + " spm";
 }
 
 function toggleUnit() {
