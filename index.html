@@ -40,7 +40,8 @@
   .speed-label{font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
   .speed-num{font-weight:800;font-size:min(30vw,18vh,140px);line-height:1;color:var(--accent);text-shadow:0 0 40px var(--glow);transition:color 0.3s}
   .speed-num.idle{color:var(--text);text-shadow:none}
-  .speed-mph{font-size:14px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--dim);margin-top:4px}
+  .speed-unit{font-size:14px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--dim);margin-top:4px;cursor:pointer;-webkit-tap-highlight-color:transparent;border-bottom:1px dashed var(--border);transition:color 0.2s}
+  .speed-unit:hover{color:var(--text)}
 
   .dv{width:32px;height:1px;background:var(--border);margin:8px 0}
 
@@ -87,17 +88,17 @@
   <div class="speed">
     <div class="speed-label">Speed</div>
     <div class="speed-num idle" id="sv">0.0</div>
-    <div class="speed-mph">mph</div>
+    <div class="speed-unit" id="unit-lbl" onclick="toggleUnit()">mph</div>
   </div>
   <div class="dv"></div>
   <div class="metrics">
     <div class="mini">
       <div class="mini-val" id="pv">--:--</div>
-      <div class="mini-lbl">pace</div>
+      <div class="mini-lbl" id="pace-lbl">pace /mi</div>
     </div>
     <div class="mini">
       <div class="mini-val" id="dval">0.00</div>
-      <div class="mini-lbl">miles</div>
+      <div class="mini-lbl" id="dist-lbl">miles</div>
     </div>
     <div class="mini">
       <div class="mini-val" id="gv">0%</div>
@@ -114,6 +115,8 @@
 <script>
 var FTMS = 0x1826, TDATA = 0x2ACD;
 var dev = null, st = null, ti = null;
+var useMetric = false;
+var lastSk = 0, lastDk = null, lastInc = null;
 var cb = document.getElementById("cb");
 var ov = document.getElementById("ov");
 var er = document.getElementById("err");
@@ -160,33 +163,47 @@ cb.addEventListener("click", async function() {
 function onD(e) {
   var d = e.target.value;
   var f = d.getUint16(0, true), o = 2;
-  var sk = 0, dk = null, inc = null;
+  lastSk = 0; lastDk = null; lastInc = null;
 
-  if (!(f & 0x01)) { sk = d.getUint16(o, true) * 0.01; o += 2; }
+  if (!(f & 0x01)) { lastSk = d.getUint16(o, true) * 0.01; o += 2; }
   if (f & 0x02) o += 2;
   if (f & 0x04) {
     var dm = d.getUint8(o) | (d.getUint8(o+1) << 8) | (d.getUint8(o+2) << 16);
-    dk = dm / 1000; o += 3;
+    lastDk = dm / 1000; o += 3;
   }
-  if (f & 0x08) { inc = d.getInt16(o, true) * 0.1; o += 4; }
+  if (f & 0x08) { lastInc = d.getInt16(o, true) * 0.1; o += 4; }
 
-  var mph = sk * 0.621371;
+  render(lastSk, lastDk, lastInc);
+}
+
+function render(sk, dk, inc) {
+  var speed = useMetric ? sk : sk * 0.621371;
   var sv = document.getElementById("sv");
-  sv.textContent = mph.toFixed(1);
-  sv.classList.toggle("idle", mph < 0.5);
+  sv.textContent = speed.toFixed(1);
+  sv.classList.toggle("idle", speed < (useMetric ? 0.8 : 0.5));
 
-  if (mph > 0.3) {
-    var mpm = 60 / mph, pm = Math.floor(mpm), ps = Math.round((mpm - pm) * 60);
+  if (speed > (useMetric ? 0.5 : 0.3)) {
+    var mpm = 60 / speed, pm = Math.floor(mpm), ps = Math.round((mpm - pm) * 60);
     document.getElementById("pv").textContent = pm + ":" + String(ps).padStart(2, "0");
   } else {
     document.getElementById("pv").textContent = "--:--";
   }
 
-  if (dk !== null) document.getElementById("dval").textContent = (dk * 0.621371).toFixed(2);
+  if (dk !== null) {
+    document.getElementById("dval").textContent = (useMetric ? dk : dk * 0.621371).toFixed(2);
+  }
   if (inc !== null) {
     var s = inc > 0 ? "+" : "";
     document.getElementById("gv").textContent = s + inc.toFixed(1) + "%";
   }
+}
+
+function toggleUnit() {
+  useMetric = !useMetric;
+  document.getElementById("unit-lbl").textContent = useMetric ? "km/h" : "mph";
+  document.getElementById("dist-lbl").textContent = useMetric ? "km" : "miles";
+  document.getElementById("pace-lbl").textContent = useMetric ? "pace /km" : "pace /mi";
+  render(lastSk, lastDk, lastInc);
 }
 
 // Disconnect handler
