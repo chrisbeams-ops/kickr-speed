@@ -62,6 +62,16 @@
   @media (min-width:600px) and (hover:hover) {
     .popup-row{display:flex}
   }
+
+  /* Landscape: speed left, metrics 2×2 right */
+  @media (orientation:landscape) and (max-height:500px) {
+    .stack{flex-direction:row;align-items:center;justify-content:center;gap:32px;padding:8px 24px}
+    .speed{padding:0}
+    .speed-num{font-size:min(22vw,30vh,120px)}
+    .dv{width:1px;height:80px;margin:0}
+    .metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:16px 32px;padding:0}
+    .mini-val{font-size:min(6vw,7vh,28px)}
+  }
 </style>
 </head>
 <body>
