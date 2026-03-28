@@ -33,29 +33,48 @@
   .popup-btn{font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:700;color:var(--dim);background:var(--bg);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent}
   .popup-btn:hover{border-color:var(--accent);color:var(--text)}
 
-  /* ── Dashboard ── */
-  .stack{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 8px;gap:4px}
+  /* ── Panels ── */
+  .panel{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+  .panel.hidden{display:none}
 
+  /* ── Display panel ── */
+  .stack{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 8px;gap:4px}
   .speed{display:flex;flex-direction:column;align-items:center;padding:12px 0}
   .speed-label{font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
   .speed-num{font-weight:800;font-size:min(30vw,18vh,140px);line-height:1;color:var(--accent);text-shadow:0 0 40px var(--glow);transition:color 0.3s}
   .speed-num.idle{color:var(--text);text-shadow:none}
   .speed-unit{font-size:14px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--dim);margin-top:4px;cursor:pointer;-webkit-tap-highlight-color:transparent;border-bottom:1px dashed var(--border);transition:color 0.2s}
   .speed-unit:hover{color:var(--text)}
-
   .dv{width:32px;height:1px;background:var(--border);margin:8px 0}
-
   .metrics{display:flex;gap:20px;padding:8px 0;flex-wrap:wrap;justify-content:center}
   .mini{display:flex;flex-direction:column;align-items:center}
   .mini-val{font-weight:700;font-size:min(8vw,5vh,28px);line-height:1.2;color:var(--text)}
   .mini-lbl{font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-top:2px}
 
-  /* Footer */
+  /* ── Control panel ── */
+  .ctrl-stack{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:20px 24px}
+  .ctrl-section{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;max-width:300px}
+  .ctrl-label{font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--dim)}
+  .ctrl-val{font-size:36px;font-weight:800;color:var(--text);line-height:1}
+  .ctrl-btns{display:flex;gap:10px;width:100%}
+  .ctrl-btn{flex:1;font-family:"JetBrains Mono",monospace;font-size:24px;font-weight:700;color:var(--text);background:var(--border);border:none;border-radius:12px;padding:18px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.1s,color 0.1s}
+  .ctrl-btn:active{background:var(--accent);color:var(--bg)}
+  .ctrl-divider{width:100%;max-width:300px;height:1px;background:var(--border)}
+  .stop-btn{width:100%;max-width:300px;font-family:"JetBrains Mono",monospace;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#ff5252;background:none;border:2px solid #ff5252;border-radius:10px;padding:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.15s,color 0.15s}
+  .stop-btn:active{background:#ff5252;color:var(--bg)}
+  .ctrl-note{font-size:9px;color:#3a3a42;text-align:center;max-width:260px;line-height:1.5}
+
+  /* ── Tabs ── */
+  .tabs{display:flex;background:var(--bg);border-top:1px solid var(--border);flex-shrink:0}
+  .tabs.hidden{display:none}
+  .tab{flex:1;font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim);background:none;border:none;padding:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:color 0.2s}
+  .tab.active{color:var(--accent)}
+
+  /* ── Footer ── */
   .footer{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;flex-shrink:0}
   .dc-btn{font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:600;color:var(--dim);background:none;border:1px solid var(--border);padding:6px 10px;border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:color 0.2s,border-color 0.2s}
   .dc-btn:hover{color:#ff5252;border-color:#ff5252}
   .timer{font-size:11px;color:var(--dim);letter-spacing:1px}
-
   .footer.hidden{display:none}
 
   /* Desktop: show popup option */
@@ -63,7 +82,7 @@
     .popup-row{display:flex}
   }
 
-  /* Landscape: speed left, metrics 2×2 right */
+  /* Landscape: speed left, metrics 3-col right */
   @media (orientation:landscape) and (max-height:500px) {
     .stack{flex-direction:row;align-items:center;justify-content:center;gap:32px;padding:8px 24px}
     .speed{padding:0}
@@ -81,58 +100,91 @@
 <!-- Connect overlay -->
 <div class="overlay" id="ov">
   <h2>KICKR Run</h2>
-  <p>Connect to your treadmill to see speed in mph, pace, distance and grade.</p>
+  <p>Connect to your treadmill to see speed, pace, distance, grade and cadence — and control speed and incline.</p>
   <button class="cbtn" id="cb">Connect</button>
   <div class="err" id="err" style="display:none"></div>
-
   <div class="popup-row" id="popupRow">
     <span style="font-size:10px;color:#3a3a42">or</span>
     <button class="popup-btn" onclick="launchPopup(120,500)">Launch as slim panel</button>
   </div>
-
   <div class="hint">iPhone: use Bluefy browser<br>Desktop: use Chrome or Edge</div>
 </div>
 
-<!-- Dashboard -->
-<div class="stack">
-  <div class="speed">
-    <div class="speed-label">Speed</div>
-    <div class="speed-num idle" id="sv">0.0</div>
-    <div class="speed-unit" id="unit-lbl" onclick="toggleUnit()">mph</div>
-  </div>
-  <div class="dv"></div>
-  <div class="metrics">
-    <div class="mini">
-      <div class="mini-val" id="pv">--:--</div>
-      <div class="mini-lbl" id="pace-lbl">pace /mi</div>
+<!-- Display panel -->
+<div class="panel" id="panel-display">
+  <div class="stack">
+    <div class="speed">
+      <div class="speed-label">Speed</div>
+      <div class="speed-num idle" id="sv">0.0</div>
+      <div class="speed-unit" id="unit-lbl" onclick="toggleUnit()">mph</div>
     </div>
-    <div class="mini">
-      <div class="mini-val" id="dval">0.00</div>
-      <div class="mini-lbl" id="dist-lbl">miles</div>
-    </div>
-    <div class="mini">
-      <div class="mini-val" id="gv">0%</div>
-      <div class="mini-lbl">grade</div>
-    </div>
-    <div class="mini">
-      <div class="mini-val" id="cadv">-- spm</div>
-      <div class="mini-lbl">cadence</div>
-    </div>
-    <div class="mini">
-      <div class="mini-val" id="calv">0</div>
-      <div class="mini-lbl">~cal</div>
+    <div class="dv"></div>
+    <div class="metrics">
+      <div class="mini">
+        <div class="mini-val" id="pv">--:--</div>
+        <div class="mini-lbl" id="pace-lbl">pace /mi</div>
+      </div>
+      <div class="mini">
+        <div class="mini-val" id="dval">0.00</div>
+        <div class="mini-lbl" id="dist-lbl">miles</div>
+      </div>
+      <div class="mini">
+        <div class="mini-val" id="gv">0%</div>
+        <div class="mini-lbl">grade</div>
+      </div>
+      <div class="mini">
+        <div class="mini-val" id="cadv">-- spm</div>
+        <div class="mini-lbl">cadence</div>
+      </div>
+      <div class="mini">
+        <div class="mini-val" id="calv">0</div>
+        <div class="mini-lbl">~cal</div>
+      </div>
     </div>
   </div>
 </div>
 
+<!-- Control panel -->
+<div class="panel hidden" id="panel-control">
+  <div class="ctrl-stack">
+    <div class="ctrl-section">
+      <div class="ctrl-label">Speed</div>
+      <div class="ctrl-val" id="cv-speed">0.0 mph</div>
+      <div class="ctrl-btns">
+        <button class="ctrl-btn" onclick="adjustSpeed(-0.5)">−</button>
+        <button class="ctrl-btn" onclick="adjustSpeed(0.5)">+</button>
+      </div>
+    </div>
+    <div class="ctrl-divider"></div>
+    <div class="ctrl-section">
+      <div class="ctrl-label">Incline</div>
+      <div class="ctrl-val" id="cv-incline">0.0%</div>
+      <div class="ctrl-btns">
+        <button class="ctrl-btn" onclick="adjustIncline(-0.5)">−</button>
+        <button class="ctrl-btn" onclick="adjustIncline(0.5)">+</button>
+      </div>
+    </div>
+    <button class="stop-btn" onclick="stopTreadmill()">Stop</button>
+    <div class="ctrl-note">Speed ±0.5 &nbsp;·&nbsp; Incline ±0.5%</div>
+  </div>
+</div>
+
+<!-- Tab bar -->
+<nav class="tabs hidden" id="tabs">
+  <button class="tab active" id="tab-display" onclick="showPanel('display')">Display</button>
+  <button class="tab" id="tab-control" onclick="showPanel('control')">Control</button>
+</nav>
+
+<!-- Footer -->
 <div class="footer hidden" id="footer">
   <button class="dc-btn" onclick="doDisconnect()">Disconnect</button>
   <div class="timer" id="tm">00:00</div>
 </div>
 
 <script>
-var FTMS = 0x1826, TDATA = 0x2ACD, RSC = 0x1814, RSC_MEAS = 0x2A53;
-var dev = null, st = null, ti = null;
+var FTMS = 0x1826, TDATA = 0x2ACD, FTMS_CP = 0x2AD9;
+var RSC = 0x1814, RSC_MEAS = 0x2A53;
+var dev = null, st = null, ti = null, cpChar = null;
 var useMetric = false;
 var lastSk = 0, lastDk = null, lastInc = null;
 var calAccum = 0, lastDataTime = 0;
@@ -141,8 +193,8 @@ var ov = document.getElementById("ov");
 var er = document.getElementById("err");
 var dt = document.getElementById("dot");
 var ft = document.getElementById("footer");
+var tabs = document.getElementById("tabs");
 
-// Check bluetooth
 if (!navigator.bluetooth) {
   cb.disabled = true;
   er.textContent = "Web Bluetooth not available. On iPhone use Bluefy browser. On desktop use Chrome.";
@@ -163,9 +215,11 @@ cb.addEventListener("click", async function() {
     await ch.startNotifications();
     ch.addEventListener("characteristicvaluechanged", onD);
     tryRSC(srv);
+    tryCP(svc);
     ov.classList.add("hidden");
     dt.classList.add("on");
     ft.classList.remove("hidden");
+    tabs.classList.remove("hidden");
     st = Date.now();
     ti = setInterval(uT, 1000);
     if ("wakeLock" in navigator) {
@@ -200,7 +254,7 @@ function onD(e) {
     var spdMpm = lastSk * 1000 / 60;
     var gradeDec = (lastInc || 0) / 100;
     var vo2 = 0.2 * spdMpm + 0.9 * spdMpm * gradeDec + 3.5;
-    calAccum += vo2 * 0.35 * dtMin; // 0.35 = 70 kg × 5 kcal/L ÷ 1000
+    calAccum += vo2 * 0.35 * dtMin;
   }
   lastDataTime = now;
 
@@ -228,10 +282,22 @@ function render(sk, dk, inc) {
     document.getElementById("gv").textContent = s + inc.toFixed(1) + "%";
   }
   document.getElementById("calv").textContent = Math.round(calAccum);
+
+  // Keep control panel values in sync
+  var ctrlSpd = useMetric ? sk : sk * 0.621371;
+  document.getElementById("cv-speed").textContent = ctrlSpd.toFixed(1) + (useMetric ? " km/h" : " mph");
+  document.getElementById("cv-incline").textContent = (inc !== null ? (inc > 0 ? "+" : "") + inc.toFixed(1) : "0.0") + "%";
 }
 
-// RSC cadence — no optionalServices declaration so Bluefy stays happy;
-// Chrome will get SecurityError which is caught silently.
+function toggleUnit() {
+  useMetric = !useMetric;
+  document.getElementById("unit-lbl").textContent = useMetric ? "km/h" : "mph";
+  document.getElementById("dist-lbl").textContent = useMetric ? "km" : "miles";
+  document.getElementById("pace-lbl").textContent = useMetric ? "pace /km" : "pace /mi";
+  render(lastSk, lastDk, lastInc);
+}
+
+// RSC cadence — no optionalServices declaration so Bluefy stays happy
 async function tryRSC(srv) {
   try {
     var rscSvc = await srv.getPrimaryService(RSC);
@@ -244,22 +310,74 @@ async function tryRSC(srv) {
   } catch(x) {}
 }
 
-function toggleUnit() {
-  useMetric = !useMetric;
-  document.getElementById("unit-lbl").textContent = useMetric ? "km/h" : "mph";
-  document.getElementById("dist-lbl").textContent = useMetric ? "km" : "miles";
-  document.getElementById("pace-lbl").textContent = useMetric ? "pace /km" : "pace /mi";
-  render(lastSk, lastDk, lastInc);
+// FTMS Control Point (in the FTMS service)
+async function tryCP(svc) {
+  try {
+    cpChar = await svc.getCharacteristic(FTMS_CP);
+    await cpChar.startNotifications();
+    // Request control
+    await writeCP(new Uint8Array([0x00]));
+  } catch(x) { cpChar = null; }
+}
+
+async function writeCP(buf) {
+  if (!cpChar) return;
+  try {
+    if (cpChar.writeValueWithResponse) {
+      await cpChar.writeValueWithResponse(buf);
+    } else {
+      await cpChar.writeValue(buf);
+    }
+  } catch(x) {}
+}
+
+// Speed: opcode 0x02, uint16 LE, 0.01 km/h resolution
+async function sendSpeed(kmh) {
+  var val = Math.round(Math.max(0, kmh) * 100);
+  await writeCP(new Uint8Array([0x02, val & 0xFF, (val >> 8) & 0xFF]));
+}
+
+// Incline: opcode 0x03, int16 LE, 0.1% resolution
+async function sendIncline(pct) {
+  var val = Math.round(pct * 10);
+  if (val < 0) val += 65536;
+  await writeCP(new Uint8Array([0x03, val & 0xFF, (val >> 8) & 0xFF]));
+}
+
+function adjustSpeed(delta) {
+  var deltaKmh = useMetric ? delta : delta / 0.621371;
+  var newKmh = Math.max(0, Math.min(25, lastSk + deltaKmh));
+  sendSpeed(newKmh);
+}
+
+function adjustIncline(delta) {
+  var newInc = Math.max(-5, Math.min(15, (lastInc || 0) + delta));
+  sendIncline(newInc);
+}
+
+function stopTreadmill() {
+  writeCP(new Uint8Array([0x08, 0x01]));
+}
+
+// Panel switching
+function showPanel(name) {
+  document.getElementById("panel-display").classList.toggle("hidden", name !== "display");
+  document.getElementById("panel-control").classList.toggle("hidden", name !== "control");
+  document.getElementById("tab-display").classList.toggle("active", name === "display");
+  document.getElementById("tab-control").classList.toggle("active", name === "control");
 }
 
 // Disconnect handler
 function onDC() {
   dt.classList.remove("on");
   ft.classList.add("hidden");
+  tabs.classList.add("hidden");
+  cpChar = null;
+  calAccum = 0; lastDataTime = 0;
   if (ti) clearInterval(ti);
   document.getElementById("cadv").textContent = "-- spm";
-  calAccum = 0; lastDataTime = 0;
   document.getElementById("calv").textContent = "0";
+  showPanel("display");
   setTimeout(function() {
     ov.classList.remove("hidden");
     cb.textContent = "Reconnect";
