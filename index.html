@@ -60,7 +60,11 @@
   .ctrl-btn{flex:1;font-family:"JetBrains Mono",monospace;font-size:24px;font-weight:700;color:var(--text);background:var(--border);border:none;border-radius:12px;padding:18px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.1s,color 0.1s}
   .ctrl-btn:active{background:var(--accent);color:var(--bg)}
   .ctrl-divider{width:100%;max-width:300px;height:1px;background:var(--border)}
-  .stop-btn{width:100%;max-width:300px;font-family:"JetBrains Mono",monospace;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#ff5252;background:none;border:2px solid #ff5252;border-radius:10px;padding:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.15s,color 0.15s}
+  .start-stop{display:flex;gap:10px;width:100%;max-width:300px}
+  .start-btn,.stop-btn{flex:1;font-family:"JetBrains Mono",monospace;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;background:none;border-radius:10px;padding:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.15s,color 0.15s}
+  .start-btn{color:var(--accent);border:2px solid var(--accent)}
+  .start-btn:active{background:var(--accent);color:var(--bg)}
+  .stop-btn{color:#ff5252;border:2px solid #ff5252}
   .stop-btn:active{background:#ff5252;color:var(--bg)}
   .ctrl-note{font-size:9px;color:#3a3a42;text-align:center;max-width:260px;line-height:1.5}
   .weight-row{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
@@ -172,7 +176,10 @@
         <button class="ctrl-btn" onclick="adjustIncline(0.5)">+</button>
       </div>
     </div>
-    <button class="stop-btn" onclick="stopTreadmill()">Stop</button>
+    <div class="start-stop">
+      <button class="start-btn" onclick="startTreadmill()">Start</button>
+      <button class="stop-btn" onclick="stopTreadmill()">Stop</button>
+    </div>
     <div class="ctrl-note">Speed ±0.5 &nbsp;·&nbsp; Incline ±0.5%</div>
   </div>
 </div>
@@ -353,10 +360,15 @@ async function sendIncline(pct) {
   await writeCP(new Uint8Array([0x03, val & 0xFF, (val >> 8) & 0xFF]));
 }
 
-function adjustSpeed(delta) {
+async function adjustSpeed(delta) {
   var deltaKmh = useMetric ? delta : delta / 0.621371;
   var newKmh = Math.max(0, Math.min(25, lastSk + deltaKmh));
-  sendSpeed(newKmh);
+  await writeCP(new Uint8Array([0x07])); // Start/Resume before speed command
+  await sendSpeed(newKmh);
+}
+
+function startTreadmill() {
+  writeCP(new Uint8Array([0x07]));
 }
 
 function adjustIncline(delta) {
