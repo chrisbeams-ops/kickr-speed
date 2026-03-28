@@ -350,11 +350,14 @@ async function tryCP(svc) {
 
 function onCP(e) {
   var d = e.target.value;
-  if (d.byteLength >= 3 && d.getUint8(0) === 0x80 && d.getUint8(1) === 0x00 && d.getUint8(2) === 0x01) {
-    hasControl = true;
-    document.getElementById("ctrl-status").textContent = "ready";
-    document.getElementById("ctrl-status").style.color = "var(--accent)";
-  }
+  if (d.byteLength < 3 || d.getUint8(0) !== 0x80) return;
+  var req = d.getUint8(1), res = d.getUint8(2);
+  var results = {0x01:"success", 0x02:"not supported", 0x03:"invalid param", 0x04:"failed", 0x05:"not permitted"};
+  var reqNames = {0x00:"request control", 0x02:"set speed", 0x03:"set incline", 0x07:"start", 0x08:"stop"};
+  var label = (reqNames[req] || "0x"+req.toString(16)) + " → " + (results[res] || "0x"+res.toString(16));
+  document.getElementById("ctrl-status").textContent = label;
+  document.getElementById("ctrl-status").style.color = res === 0x01 ? "var(--accent)" : "#ff5252";
+  if (req === 0x00 && res === 0x01) hasControl = true;
 }
 
 async function writeCP(buf) {
