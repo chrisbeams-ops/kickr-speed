@@ -206,7 +206,7 @@ var FTMS = 0x1826, TDATA = 0x2ACD, FTMS_CP = 0x2AD9;
 var RSC = 0x1814, RSC_MEAS = 0x2A53;
 var dev = null, st = null, ti = null, cpChar = null, hasControl = false;
 var useMetric = false;
-var lastSk = 0, lastDk = null, lastInc = null;
+var lastSk = 0, lastDk = null, lastInc = null, sessionStartDk = null;
 var calAccum = 0, lastDataTime = 0;
 var cb = document.getElementById("cb");
 var ov = document.getElementById("ov");
@@ -263,7 +263,9 @@ function onD(e) {
   if (f & 0x02) o += 2;
   if (f & 0x04) {
     var dm = d.getUint8(o) | (d.getUint8(o+1) << 8) | (d.getUint8(o+2) << 16);
-    lastDk = dm / 1000; o += 3;
+    lastDk = dm / 1000;
+    if (sessionStartDk === null) sessionStartDk = lastDk;
+    o += 3;
   }
   if (f & 0x08) { lastInc = d.getInt16(o, true) * 0.1; o += 4; }
 
@@ -295,7 +297,8 @@ function render(sk, dk, inc) {
   }
 
   if (dk !== null) {
-    document.getElementById("dval").textContent = (useMetric ? dk : dk * 0.621371).toFixed(2);
+    var sessionDk = dk - (sessionStartDk || 0);
+    document.getElementById("dval").textContent = (useMetric ? sessionDk : sessionDk * 0.621371).toFixed(2);
   }
   if (inc !== null) {
     var s = inc > 0 ? "+" : "";
@@ -414,7 +417,7 @@ function onDC() {
   document.getElementById("ctrl-status").textContent = "waiting…";
   document.getElementById("ctrl-status").style.color = "var(--dim)";
   calAccum = 0; lastDataTime = 0;
-  lastSk = 0; lastDk = null; lastInc = null;
+  lastSk = 0; lastDk = null; lastInc = null; sessionStartDk = null;
   if (ti) clearInterval(ti);
   document.getElementById("sv").textContent = "0.0";
   document.getElementById("sv").classList.add("idle");
