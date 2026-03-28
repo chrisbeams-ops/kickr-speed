@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>KICKR Run Speed</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏃</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{--bg:#0a0a0c;--border:#1e1e24;--text:#e8e8ec;--dim:#55555f;--accent:#00e676;--glow:rgba(0,230,118,0.12)}
+  body{font-family:"JetBrains Mono",monospace;background:var(--bg);color:var(--text);height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased;user-select:none}
+
+  /* Status dot */
+  .dot{position:fixed;top:10px;right:10px;width:8px;height:8px;border-radius:50%;background:var(--dim);box-shadow:none;z-index:10;transition:all 0.3s}
+  .dot.on{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+
+  /* ── Connect overlay ── */
+  .overlay{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:20;padding:24px}
+  .overlay.hidden{display:none}
+  .overlay h2{font-size:16px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
+  .overlay p{font-size:12px;color:var(--dim);text-align:center;line-height:1.5;max-width:300px}
+  .cbtn{font-family:"JetBrains Mono",monospace;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--bg);background:var(--accent);border:none;padding:14px 32px;border-radius:10px;cursor:pointer;box-shadow:0 4px 20px rgba(0,230,118,0.25);-webkit-tap-highlight-color:transparent;transition:transform 0.15s}
+  .cbtn:hover{transform:translateY(-1px)}
+  .cbtn:disabled{opacity:0.5;transform:none}
+  .err{font-size:11px;color:#ff5252;text-align:center;max-width:280px;line-height:1.4}
+  .hint{font-size:10px;color:#3a3a42;text-align:center;line-height:1.4;max-width:260px}
+
+  /* Desktop popup launcher */
+  .popup-row{display:none;align-items:center;gap:10px}
+  .popup-btn{font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:700;color:var(--dim);background:var(--bg);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .popup-btn:hover{border-color:var(--accent);color:var(--text)}
+
+  /* ── Dashboard ── */
+  .stack{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 8px;gap:4px}
+
+  .speed{display:flex;flex-direction:column;align-items:center;padding:12px 0}
+  .speed-label{font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+  .speed-num{font-weight:800;font-size:min(30vw,18vh,140px);line-height:1;color:var(--accent);text-shadow:0 0 40px var(--glow);transition:color 0.3s}
+  .speed-num.idle{color:var(--text);text-shadow:none}
+  .speed-mph{font-size:14px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--dim);margin-top:4px}
+
+  .dv{width:32px;height:1px;background:var(--border);margin:8px 0}
+
+  .metrics{display:flex;gap:28px;padding:8px 0}
+  .mini{display:flex;flex-direction:column;align-items:center}
+  .mini-val{font-weight:700;font-size:min(8vw,5vh,28px);line-height:1.2;color:var(--text)}
+  .mini-lbl{font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-top:2px}
+
+  /* Footer */
+  .footer{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;flex-shrink:0}
+  .dc-btn{font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:600;color:var(--dim);background:none;border:1px solid var(--border);padding:6px 10px;border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:color 0.2s,border-color 0.2s}
+  .dc-btn:hover{color:#ff5252;border-color:#ff5252}
+  .timer{font-size:11px;color:var(--dim);letter-spacing:1px}
+
+  .footer.hidden{display:none}
+
+  /* Desktop: show popup option */
+  @media (min-width:600px) and (hover:hover) {
+    .popup-row{display:flex}
+  }
+</style>
+</head>
+<body>
+
+<div class="dot" id="dot"></div>
+
+<!-- Connect overlay -->
+<div class="overlay" id="ov">
+  <h2>KICKR Run</h2>
+  <p>Connect to your treadmill to see speed in mph, pace, distance and grade.</p>
+  <button class="cbtn" id="cb">Connect</button>
+  <div class="err" id="err" style="display:none"></div>
+
+  <div class="popup-row" id="popupRow">
+    <span style="font-size:10px;color:#3a3a42">or</span>
+    <button class="popup-btn" onclick="launchPopup(120,500)">Launch as slim panel</button>
+  </div>
+
+  <div class="hint">iPhone: use Bluefy browser<br>Desktop: use Chrome or Edge</div>
+</div>
+
+<!-- Dashboard -->
+<div class="stack">
+  <div class="speed">
+    <div class="speed-label">Speed</div>
+    <div class="speed-num idle" id="sv">0.0</div>
+    <div class="speed-mph">mph</div>
+  </div>
+  <div class="dv"></div>
+  <div class="metrics">
+    <div class="mini">
+      <div class="mini-val" id="pv">--:--</div>
+      <div class="mini-lbl">pace</div>
+    </div>
+    <div class="mini">
+      <div class="mini-val" id="dval">0.00</div>
+      <div class="mini-lbl">miles</div>
+    </div>
+    <div class="mini">
+      <div class="mini-val" id="gv">0%</div>
+      <div class="mini-lbl">grade</div>
+    </div>
+  </div>
+</div>
+
+<div class="footer hidden" id="footer">
+  <button class="dc-btn" onclick="doDisconnect()">Disconnect</button>
+  <div class="timer" id="tm">00:00</div>
+</div>
+
+<script>
+var FTMS = 0x1826, TDATA = 0x2ACD;
+var dev = null, st = null, ti = null;
+var cb = document.getElementById("cb");
+var ov = document.getElementById("ov");
+var er = document.getElementById("err");
+var dt = document.getElementById("dot");
+var ft = document.getElementById("footer");
+
+// Check bluetooth
+if (!navigator.bluetooth) {
+  cb.disabled = true;
+  er.textContent = "Web Bluetooth not available. On iPhone use Bluefy browser. On desktop use Chrome.";
+  er.style.display = "block";
+}
+
+// Connect
+cb.addEventListener("click", async function() {
+  er.style.display = "none";
+  cb.textContent = "Connecting...";
+  cb.disabled = true;
+  try {
+    dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [FTMS] }] });
+    dev.addEventListener("gattserverdisconnected", onDC);
+    var srv = await dev.gatt.connect();
+    var svc = await srv.getPrimaryService(FTMS);
+    var ch = await svc.getCharacteristic(TDATA);
+    await ch.startNotifications();
+    ch.addEventListener("characteristicvaluechanged", onD);
+    ov.classList.add("hidden");
+    dt.classList.add("on");
+    ft.classList.remove("hidden");
+    st = Date.now();
+    ti = setInterval(uT, 1000);
+    if ("wakeLock" in navigator) {
+      try { await navigator.wakeLock.request("screen"); } catch(x) {}
+    }
+  } catch(e) {
+    er.textContent = e.message || "Connection failed";
+    er.style.display = "block";
+    cb.textContent = "Connect";
+    cb.disabled = false;
+  }
+});
+
+// Parse FTMS treadmill data
+function onD(e) {
+  var d = e.target.value;
+  var f = d.getUint16(0, true), o = 2;
+  var sk = 0, dk = null, inc = null;
+
+  if (!(f & 0x01)) { sk = d.getUint16(o, true) * 0.01; o += 2; }
+  if (f & 0x02) o += 2;
+  if (f & 0x04) {
+    var dm = d.getUint8(o) | (d.getUint8(o+1) << 8) | (d.getUint8(o+2) << 16);
+    dk = dm / 1000; o += 3;
+  }
+  if (f & 0x08) { inc = d.getInt16(o, true) * 0.1; o += 4; }
+
+  var mph = sk * 0.621371;
+  var sv = document.getElementById("sv");
+  sv.textContent = mph.toFixed(1);
+  sv.classList.toggle("idle", mph < 0.5);
+
+  if (mph > 0.3) {
+    var mpm = 60 / mph, pm = Math.floor(mpm), ps = Math.round((mpm - pm) * 60);
+    document.getElementById("pv").textContent = pm + ":" + String(ps).padStart(2, "0");
+  } else {
+    document.getElementById("pv").textContent = "--:--";
+  }
+
+  if (dk !== null) document.getElementById("dval").textContent = (dk * 0.621371).toFixed(2);
+  if (inc !== null) {
+    var s = inc > 0 ? "+" : "";
+    document.getElementById("gv").textContent = s + inc.toFixed(0) + "%";
+  }
+}
+
+// Disconnect handler
+function onDC() {
+  dt.classList.remove("on");
+  ft.classList.add("hidden");
+  if (ti) clearInterval(ti);
+  setTimeout(function() {
+    ov.classList.remove("hidden");
+    cb.textContent = "Reconnect";
+    cb.disabled = false;
+  }, 1500);
+}
+
+function doDisconnect() {
+  if (dev && dev.gatt.connected) dev.gatt.disconnect();
+}
+
+// Elapsed timer
+function uT() {
+  if (!st) return;
+  var e = Math.floor((Date.now() - st) / 1000);
+  var m = Math.floor(e / 60), s = e % 60;
+  document.getElementById("tm").textContent = String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+}
+
+// Desktop popup launcher
+function launchPopup(pw, ph) {
+  var left = window.screen.width - pw - 20;
+  var top = Math.round((window.screen.height - ph) / 2);
+  var features = "width=" + pw + ",height=" + ph + ",left=" + left + ",top=" + top + ",resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no";
+  var popup = window.open(location.href, "kickr_speed", features);
+  if (!popup) alert("Popup blocked - please allow popups for this site.");
+}
+</script>
+</body>
+</html>
