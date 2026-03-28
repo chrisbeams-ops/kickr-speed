@@ -105,8 +105,8 @@
       <div class="mini-lbl">grade</div>
     </div>
     <div class="mini">
-      <div class="mini-val" id="cadv">--</div>
-      <div class="mini-lbl">spm</div>
+      <div class="mini-val" id="cadv">-- spm</div>
+      <div class="mini-lbl">cadence</div>
     </div>
   </div>
 </div>
@@ -212,7 +212,7 @@ function render(sk, dk, inc) {
 function onRSC(e) {
   var d = e.target.value;
   var cadence = d.getUint8(3) * 2; // strides/min * 2 = steps/min
-  document.getElementById("cadv").textContent = cadence;
+  document.getElementById("cadv").textContent = cadence + " spm";
 }
 
 function toggleUnit() {
@@ -228,7 +228,7 @@ function onDC() {
   dt.classList.remove("on");
   ft.classList.add("hidden");
   if (ti) clearInterval(ti);
-  document.getElementById("cadv").textContent = "--";
+  document.getElementById("cadv").textContent = "-- spm";
   setTimeout(function() {
     ov.classList.remove("hidden");
     cb.textContent = "Reconnect";
