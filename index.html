@@ -67,10 +67,6 @@
   .stop-btn{color:#ff5252;border:2px solid #ff5252}
   .stop-btn:active{background:#ff5252;color:var(--bg)}
   .ctrl-note{font-size:9px;color:#3a3a42;text-align:center;max-width:260px;line-height:1.5}
-  .weight-row{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
-  .weight-val{font-size:14px;font-weight:700;color:var(--text);min-width:36px;text-align:center}
-  .weight-btn{font-family:"JetBrains Mono",monospace;font-size:14px;font-weight:700;color:var(--text);background:var(--border);border:none;border-radius:6px;padding:4px 10px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.1s,color 0.1s}
-  .weight-btn:active{background:var(--accent);color:var(--bg)}
 
   /* ── Tabs ── */
   .tabs{display:flex;background:var(--bg);border-top:1px solid var(--border);flex-shrink:0}
@@ -149,13 +145,6 @@
         <div class="mini-lbl">~cal</div>
       </div>
     </div>
-    <div class="weight-row" style="margin-top:8px">
-      <span>Weight</span>
-      <button class="weight-btn" onclick="adjustWeight(-1)">−</button>
-      <span class="weight-val" id="weight-val">70</span>
-      <button class="weight-btn" onclick="adjustWeight(1)">+</button>
-      <span>kg</span>
-    </div>
   </div>
 </div>
 
@@ -182,6 +171,15 @@
     <div class="start-stop">
       <button class="start-btn" onclick="startTreadmill()">Start</button>
       <button class="stop-btn" onclick="stopTreadmill()">Stop</button>
+    </div>
+    <div class="ctrl-divider"></div>
+    <div class="ctrl-section">
+      <div class="ctrl-label">Weight (~cal)</div>
+      <div class="ctrl-btns">
+        <button class="ctrl-btn" onclick="adjustWeight(-1)">−</button>
+        <div class="ctrl-val" id="weight-val" style="min-width:80px;text-align:center">70 kg</div>
+        <button class="ctrl-btn" onclick="adjustWeight(1)">+</button>
+      </div>
     </div>
     <div class="ctrl-note">Speed ±0.5 &nbsp;·&nbsp; Incline ±0.5%<br>Control: <span id="ctrl-status" style="color:var(--dim)">waiting…</span></div>
   </div>
@@ -454,12 +452,12 @@ function uT() {
 }
 
 // Weight buttons
-document.getElementById("weight-val").textContent = userWeightKg;
+document.getElementById("weight-val").textContent = userWeightKg + " kg";
 function adjustWeight(delta) {
   var v = Math.min(250, Math.max(30, userWeightKg + delta));
   userWeightKg = v;
   localStorage.setItem("weightKg", v);
-  document.getElementById("weight-val").textContent = v;
+  document.getElementById("weight-val").textContent = v + " kg";
 }
 
 // Desktop popup launcher
