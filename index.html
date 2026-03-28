@@ -67,6 +67,10 @@
   .stop-btn{color:#ff5252;border:2px solid #ff5252}
   .stop-btn:active{background:#ff5252;color:var(--bg)}
   .ctrl-note{font-size:9px;color:#3a3a42;text-align:center;max-width:260px;line-height:1.5}
+  .grade-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%;max-width:300px}
+  .grade-btn{font-family:"JetBrains Mono",monospace;font-size:14px;font-weight:700;color:var(--text);background:var(--border);border:2px solid transparent;border-radius:10px;padding:14px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.1s,color 0.1s,border-color 0.1s;text-align:center}
+  .grade-btn:active{background:var(--accent);color:var(--bg)}
+  .grade-btn.active{border-color:var(--accent);color:var(--accent)}
 
   /* ── Tabs ── */
   .tabs{display:flex;background:var(--bg);border-top:1px solid var(--border);flex-shrink:0}
@@ -152,26 +156,26 @@
 <div class="panel hidden" id="panel-control">
   <div class="ctrl-stack">
     <div class="ctrl-section">
-      <div class="ctrl-label">Speed</div>
-      <div class="ctrl-val" id="cv-speed">0.0 mph</div>
-      <div class="ctrl-btns">
-        <button class="ctrl-btn" onclick="adjustSpeed(-0.5)">−</button>
-        <button class="ctrl-btn" onclick="adjustSpeed(0.5)">+</button>
+      <div class="ctrl-label">Grade</div>
+      <div class="grade-grid" id="grade-grid">
+        <button class="grade-btn" data-grade="-3" onclick="setGrade(-3)">−3%</button>
+        <button class="grade-btn" data-grade="-2" onclick="setGrade(-2)">−2%</button>
+        <button class="grade-btn" data-grade="-1" onclick="setGrade(-1)">−1%</button>
+        <button class="grade-btn" data-grade="0"  onclick="setGrade(0)">0%</button>
+        <button class="grade-btn" data-grade="1"  onclick="setGrade(1)">+1%</button>
+        <button class="grade-btn" data-grade="2"  onclick="setGrade(2)">+2%</button>
+        <button class="grade-btn" data-grade="3"  onclick="setGrade(3)">+3%</button>
+        <button class="grade-btn" data-grade="4"  onclick="setGrade(4)">+4%</button>
+        <button class="grade-btn" data-grade="5"  onclick="setGrade(5)">+5%</button>
+        <button class="grade-btn" data-grade="6"  onclick="setGrade(6)">+6%</button>
+        <button class="grade-btn" data-grade="7"  onclick="setGrade(7)">+7%</button>
+        <button class="grade-btn" data-grade="8"  onclick="setGrade(8)">+8%</button>
+        <button class="grade-btn" data-grade="10" onclick="setGrade(10)">+10%</button>
+        <button class="grade-btn" data-grade="12" onclick="setGrade(12)">+12%</button>
+        <button class="grade-btn" data-grade="15" onclick="setGrade(15)">+15%</button>
       </div>
     </div>
-    <div class="ctrl-divider"></div>
-    <div class="ctrl-section">
-      <div class="ctrl-label">Incline</div>
-      <div class="ctrl-val" id="cv-incline">0.0%</div>
-      <div class="ctrl-btns">
-        <button class="ctrl-btn" onclick="adjustIncline(-0.5)">−</button>
-        <button class="ctrl-btn" onclick="adjustIncline(0.5)">+</button>
-      </div>
-    </div>
-    <div class="start-stop">
-      <button class="start-btn" onclick="startTreadmill()">Start</button>
-      <button class="stop-btn" onclick="stopTreadmill()">Stop</button>
-    </div>
+    <button class="stop-btn" style="width:100%;max-width:300px" onclick="stopTreadmill()">Stop</button>
     <div class="ctrl-divider"></div>
     <div class="ctrl-section">
       <div class="ctrl-label">Weight (~cal)</div>
@@ -181,7 +185,7 @@
         <button class="ctrl-btn" onclick="adjustWeight(1)">+</button>
       </div>
     </div>
-    <div class="ctrl-note">Speed ±0.5 &nbsp;·&nbsp; Incline ±0.5%<br>Control: <span id="ctrl-status" style="color:var(--dim)">waiting…</span></div>
+    <div class="ctrl-note">Control: <span id="ctrl-status" style="color:var(--dim)">waiting…</span></div>
   </div>
 </div>
 
@@ -300,10 +304,11 @@ function render(sk, dk, inc) {
   }
   document.getElementById("calv").textContent = Math.round(calAccum);
 
-  // Keep control panel values in sync
-  var ctrlSpd = useMetric ? sk : sk * 0.621371;
-  document.getElementById("cv-speed").textContent = ctrlSpd.toFixed(1) + (useMetric ? " km/h" : " mph");
-  document.getElementById("cv-incline").textContent = (inc !== null ? (inc > 0 ? "+" : "") + inc.toFixed(1) : "0.0") + "%";
+  // Highlight matching grade button
+  var activeGrade = inc !== null ? Math.round(inc) : null;
+  document.querySelectorAll(".grade-btn").forEach(function(btn) {
+    btn.classList.toggle("active", parseInt(btn.dataset.grade) === activeGrade);
+  });
 }
 
 function toggleUnit() {
@@ -385,20 +390,8 @@ async function sendIncline(pct) {
   await writeCP(new Uint8Array([0x03, val & 0xFF, (val >> 8) & 0xFF]));
 }
 
-async function adjustSpeed(delta) {
-  var deltaKmh = useMetric ? delta : delta / 0.621371;
-  var newKmh = Math.max(0, Math.min(25, lastSk + deltaKmh));
-  await writeCP(new Uint8Array([0x07])); // Start/Resume before speed command
-  await sendSpeed(newKmh);
-}
-
-function startTreadmill() {
-  writeCP(new Uint8Array([0x07]));
-}
-
-function adjustIncline(delta) {
-  var newInc = Math.max(-5, Math.min(15, (lastInc || 0) + delta));
-  sendIncline(newInc);
+function setGrade(pct) {
+  sendIncline(pct);
 }
 
 function stopTreadmill() {
