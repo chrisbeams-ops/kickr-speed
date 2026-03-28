@@ -45,7 +45,7 @@
 
   .dv{width:32px;height:1px;background:var(--border);margin:8px 0}
 
-  .metrics{display:flex;gap:28px;padding:8px 0}
+  .metrics{display:flex;gap:20px;padding:8px 0;flex-wrap:wrap;justify-content:center}
   .mini{display:flex;flex-direction:column;align-items:center}
   .mini-val{font-weight:700;font-size:min(8vw,5vh,28px);line-height:1.2;color:var(--text)}
   .mini-lbl{font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-top:2px}
@@ -104,6 +104,10 @@
       <div class="mini-val" id="gv">0%</div>
       <div class="mini-lbl">grade</div>
     </div>
+    <div class="mini">
+      <div class="mini-val" id="cadv">--</div>
+      <div class="mini-lbl">spm</div>
+    </div>
   </div>
 </div>
 
@@ -113,7 +117,7 @@
 </div>
 
 <script>
-var FTMS = 0x1826, TDATA = 0x2ACD;
+var FTMS = 0x1826, TDATA = 0x2ACD, RSC = 0x1814, RSC_MEAS = 0x2A53;
 var dev = null, st = null, ti = null;
 var useMetric = false;
 var lastSk = 0, lastDk = null, lastInc = null;
@@ -136,13 +140,19 @@ cb.addEventListener("click", async function() {
   cb.textContent = "Connecting...";
   cb.disabled = true;
   try {
-    dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [FTMS] }] });
+    dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [FTMS] }], optionalServices: [RSC] });
     dev.addEventListener("gattserverdisconnected", onDC);
     var srv = await dev.gatt.connect();
     var svc = await srv.getPrimaryService(FTMS);
     var ch = await svc.getCharacteristic(TDATA);
     await ch.startNotifications();
     ch.addEventListener("characteristicvaluechanged", onD);
+    try {
+      var rscSvc = await srv.getPrimaryService(RSC);
+      var rscCh = await rscSvc.getCharacteristic(RSC_MEAS);
+      await rscCh.startNotifications();
+      rscCh.addEventListener("characteristicvaluechanged", onRSC);
+    } catch(x) {}
     ov.classList.add("hidden");
     dt.classList.add("on");
     ft.classList.remove("hidden");
@@ -198,6 +208,13 @@ function render(sk, dk, inc) {
   }
 }
 
+// Parse RSC cadence data (strides/min → steps/min)
+function onRSC(e) {
+  var d = e.target.value;
+  var cadence = d.getUint8(3) * 2; // strides/min * 2 = steps/min
+  document.getElementById("cadv").textContent = cadence;
+}
+
 function toggleUnit() {
   useMetric = !useMetric;
   document.getElementById("unit-lbl").textContent = useMetric ? "km/h" : "mph";
@@ -211,6 +228,7 @@ function onDC() {
   dt.classList.remove("on");
   ft.classList.add("hidden");
   if (ti) clearInterval(ti);
+  document.getElementById("cadv").textContent = "--";
   setTimeout(function() {
     ov.classList.remove("hidden");
     cb.textContent = "Reconnect";
