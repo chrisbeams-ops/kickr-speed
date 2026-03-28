@@ -180,7 +180,7 @@
       <button class="start-btn" onclick="startTreadmill()">Start</button>
       <button class="stop-btn" onclick="stopTreadmill()">Stop</button>
     </div>
-    <div class="ctrl-note">Speed ±0.5 &nbsp;·&nbsp; Incline ±0.5%</div>
+    <div class="ctrl-note">Speed ±0.5 &nbsp;·&nbsp; Incline ±0.5%<br>Control: <span id="ctrl-status" style="color:var(--dim)">waiting…</span></div>
   </div>
 </div>
 
@@ -200,7 +200,7 @@
 var userWeightKg = parseFloat(localStorage.getItem("weightKg") || "70");
 var FTMS = 0x1826, TDATA = 0x2ACD, FTMS_CP = 0x2AD9;
 var RSC = 0x1814, RSC_MEAS = 0x2A53;
-var dev = null, st = null, ti = null, cpChar = null;
+var dev = null, st = null, ti = null, cpChar = null, hasControl = false;
 var useMetric = false;
 var lastSk = 0, lastDk = null, lastInc = null;
 var calAccum = 0, lastDataTime = 0;
@@ -331,9 +331,30 @@ async function tryCP(svc) {
   try {
     cpChar = await svc.getCharacteristic(FTMS_CP);
     await cpChar.startNotifications();
-    // Request control
-    await writeCP(new Uint8Array([0x00]));
+    cpChar.addEventListener("characteristicvaluechanged", onCP);
+    // Request control and wait for acknowledgement (max 3s)
+    await new Promise(function(resolve) {
+      var done = false;
+      function onGrant() {
+        if (done) return;
+        done = true;
+        cpChar.removeEventListener("characteristicvaluechanged", onGrant);
+        resolve();
+      }
+      cpChar.addEventListener("characteristicvaluechanged", onGrant);
+      setTimeout(function() { done = true; resolve(); }, 3000);
+      writeCP(new Uint8Array([0x00]));
+    });
   } catch(x) { cpChar = null; }
+}
+
+function onCP(e) {
+  var d = e.target.value;
+  if (d.byteLength >= 3 && d.getUint8(0) === 0x80 && d.getUint8(1) === 0x00 && d.getUint8(2) === 0x01) {
+    hasControl = true;
+    document.getElementById("ctrl-status").textContent = "ready";
+    document.getElementById("ctrl-status").style.color = "var(--accent)";
+  }
 }
 
 async function writeCP(buf) {
@@ -393,7 +414,9 @@ function onDC() {
   dt.classList.remove("on");
   ft.classList.add("hidden");
   tabs.classList.add("hidden");
-  cpChar = null;
+  cpChar = null; hasControl = false;
+  document.getElementById("ctrl-status").textContent = "waiting…";
+  document.getElementById("ctrl-status").style.color = "var(--dim)";
   calAccum = 0; lastDataTime = 0;
   if (ti) clearInterval(ti);
   document.getElementById("cadv").textContent = "-- spm";
