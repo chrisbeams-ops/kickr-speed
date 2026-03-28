@@ -117,7 +117,7 @@
 </div>
 
 <script>
-var FTMS = 0x1826, TDATA = 0x2ACD;
+var FTMS = 0x1826, TDATA = 0x2ACD, RSC = 0x1814, RSC_MEAS = 0x2A53;
 var dev = null, st = null, ti = null;
 var useMetric = false;
 var lastSk = 0, lastDk = null, lastInc = null;
@@ -147,6 +147,7 @@ cb.addEventListener("click", async function() {
     var ch = await svc.getCharacteristic(TDATA);
     await ch.startNotifications();
     ch.addEventListener("characteristicvaluechanged", onD);
+    tryRSC(srv);
     ov.classList.add("hidden");
     dt.classList.add("on");
     ft.classList.remove("hidden");
@@ -200,6 +201,20 @@ function render(sk, dk, inc) {
     var s = inc > 0 ? "+" : "";
     document.getElementById("gv").textContent = s + inc.toFixed(1) + "%";
   }
+}
+
+// RSC cadence — no optionalServices declaration so Bluefy stays happy;
+// Chrome will get SecurityError which is caught silently.
+async function tryRSC(srv) {
+  try {
+    var rscSvc = await srv.getPrimaryService(RSC);
+    var rscCh = await rscSvc.getCharacteristic(RSC_MEAS);
+    await rscCh.startNotifications();
+    rscCh.addEventListener("characteristicvaluechanged", function(e) {
+      var cadence = e.target.value.getUint8(3) * 2;
+      document.getElementById("cadv").textContent = cadence + " spm";
+    });
+  } catch(x) {}
 }
 
 function toggleUnit() {
