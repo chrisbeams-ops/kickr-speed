@@ -421,7 +421,13 @@ function onDC() {
   document.getElementById("ctrl-status").textContent = "waiting…";
   document.getElementById("ctrl-status").style.color = "var(--dim)";
   calAccum = 0; lastDataTime = 0;
+  lastSk = 0; lastDk = null; lastInc = null;
   if (ti) clearInterval(ti);
+  document.getElementById("sv").textContent = "0.0";
+  document.getElementById("sv").classList.add("idle");
+  document.getElementById("pv").textContent = "--:--";
+  document.getElementById("dval").textContent = "0.00";
+  document.getElementById("gv").textContent = "0%";
   document.getElementById("cadv").textContent = "-- spm";
   document.getElementById("calv").textContent = "0";
   showPanel("display");
