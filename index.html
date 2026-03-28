@@ -68,8 +68,9 @@
   .stop-btn:active{background:#ff5252;color:var(--bg)}
   .ctrl-note{font-size:9px;color:#3a3a42;text-align:center;max-width:260px;line-height:1.5}
   .weight-row{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
-  .weight-input{font-family:"JetBrains Mono",monospace;font-size:14px;font-weight:700;color:var(--text);background:var(--border);border:none;border-radius:6px;padding:6px 10px;width:64px;text-align:center;-webkit-appearance:none;appearance:none}
-  .weight-input:focus{outline:1px solid var(--accent)}
+  .weight-val{font-size:14px;font-weight:700;color:var(--text);min-width:36px;text-align:center}
+  .weight-btn{font-family:"JetBrains Mono",monospace;font-size:14px;font-weight:700;color:var(--text);background:var(--border);border:none;border-radius:6px;padding:4px 10px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.1s,color 0.1s}
+  .weight-btn:active{background:var(--accent);color:var(--bg)}
 
   /* ── Tabs ── */
   .tabs{display:flex;background:var(--bg);border-top:1px solid var(--border);flex-shrink:0}
@@ -150,7 +151,9 @@
     </div>
     <div class="weight-row" style="margin-top:8px">
       <span>Weight</span>
-      <input class="weight-input" id="weight-input" type="number" min="30" max="250" step="1" value="70">
+      <button class="weight-btn" onclick="adjustWeight(-1)">−</button>
+      <span class="weight-val" id="weight-val">70</span>
+      <button class="weight-btn" onclick="adjustWeight(1)">+</button>
       <span>kg</span>
     </div>
   </div>
@@ -450,18 +453,14 @@ function uT() {
   document.getElementById("tm").textContent = String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
 }
 
-// Weight input
-var wInput = document.getElementById("weight-input");
-wInput.value = userWeightKg;
-wInput.addEventListener("change", function() {
-  var v = parseFloat(this.value);
-  if (!isNaN(v) && v >= 30 && v <= 250) {
-    userWeightKg = v;
-    localStorage.setItem("weightKg", v);
-  } else {
-    this.value = userWeightKg;
-  }
-});
+// Weight buttons
+document.getElementById("weight-val").textContent = userWeightKg;
+function adjustWeight(delta) {
+  var v = Math.min(250, Math.max(30, userWeightKg + delta));
+  userWeightKg = v;
+  localStorage.setItem("weightKg", v);
+  document.getElementById("weight-val").textContent = v;
+}
 
 // Desktop popup launcher
 function launchPopup(pw, ph) {
