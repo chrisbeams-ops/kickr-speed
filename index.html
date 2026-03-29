@@ -209,7 +209,7 @@
 
 <script>
 var userWeightKg = parseFloat(localStorage.getItem("weightKg") || "70");
-if (localStorage.getItem("theme") === "light") applyTheme("light");
+applyTheme(localStorage.getItem("theme") || "light");
 var FTMS = 0x1826, TDATA = 0x2ACD, FTMS_CP = 0x2AD9;
 var RSC = 0x1814, RSC_MEAS = 0x2A53;
 var dev = null, st = null, ti = null, cpChar = null, hasControl = false;
