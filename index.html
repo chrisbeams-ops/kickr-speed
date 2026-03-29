@@ -145,6 +145,10 @@
         <div class="mini-lbl">cadence</div>
       </div>
       <div class="mini">
+        <div class="mini-val" id="tmv">00:00</div>
+        <div class="mini-lbl">time</div>
+      </div>
+      <div class="mini">
         <div class="mini-val" id="calv">0</div>
         <div class="mini-lbl">~cal</div>
       </div>
@@ -426,6 +430,7 @@ function onDC() {
   document.getElementById("gv").textContent = "0%";
   document.getElementById("cadv").textContent = "-- spm";
   document.getElementById("calv").textContent = "0";
+  document.getElementById("tmv").textContent = "00:00";
   showPanel("display");
   setTimeout(function() {
     ov.classList.remove("hidden");
@@ -443,7 +448,9 @@ function uT() {
   if (!st) return;
   var e = Math.floor((Date.now() - st) / 1000);
   var m = Math.floor(e / 60), s = e % 60;
-  document.getElementById("tm").textContent = String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+  var t = String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+  document.getElementById("tm").textContent = t;
+  document.getElementById("tmv").textContent = t;
 }
 
 // Weight buttons
