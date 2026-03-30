@@ -151,6 +151,10 @@
         <div class="mini-lbl">time</div>
       </div>
       <div class="mini">
+        <div class="mini-val" id="lpv">--:--</div>
+        <div class="mini-lbl" id="lp-lbl">last /mi</div>
+      </div>
+      <div class="mini">
         <div class="mini-val" id="calv">0</div>
         <div class="mini-lbl">~cal</div>
       </div>
@@ -216,6 +220,8 @@ var dev = null, st = null, ti = null, cpChar = null, hasControl = false;
 var useMetric = false;
 var lastSk = 0, lastDk = null, lastInc = null, sessionStartDk = null;
 var calAccum = 0, lastDataTime = 0;
+var lastMileMarker = 0, lastMileMarkerTime = null, lastMilePaceStr = "--:--";
+var lastKmMarker = 0, lastKmMarkerTime = null, lastKmPaceStr = "--:--";
 var cb = document.getElementById("cb");
 var ov = document.getElementById("ov");
 var er = document.getElementById("err");
@@ -272,7 +278,7 @@ function onD(e) {
   if (f & 0x04) {
     var dm = d.getUint8(o) | (d.getUint8(o+1) << 8) | (d.getUint8(o+2) << 16);
     lastDk = dm / 1000;
-    if (sessionStartDk === null) sessionStartDk = lastDk;
+    if (sessionStartDk === null) { sessionStartDk = lastDk; lastMileMarkerTime = Date.now(); lastKmMarkerTime = Date.now(); }
     o += 3;
   }
   if (f & 0x08) { lastInc = d.getInt16(o, true) * 0.1; o += 4; }
@@ -287,6 +293,27 @@ function onD(e) {
     calAccum += vo2 * (userWeightKg * 5 / 1000) * dtMin;
   }
   lastDataTime = now;
+
+  // Detect mile/km completions
+  if (lastDk !== null && sessionStartDk !== null) {
+    var sDkMi = (lastDk - sessionStartDk) * 0.621371;
+    var curMile = Math.floor(sDkMi);
+    if (curMile > lastMileMarker && lastMileMarkerTime !== null) {
+      var ms = now - lastMileMarkerTime;
+      var mm = Math.floor(ms / 60000), ss = Math.round((ms % 60000) / 1000);
+      lastMilePaceStr = mm + ":" + String(ss).padStart(2, "0");
+    }
+    if (curMile > lastMileMarker) { lastMileMarker = curMile; lastMileMarkerTime = now; }
+
+    var sDkKm = lastDk - sessionStartDk;
+    var curKm = Math.floor(sDkKm);
+    if (curKm > lastKmMarker && lastKmMarkerTime !== null) {
+      var ms2 = now - lastKmMarkerTime;
+      var mm2 = Math.floor(ms2 / 60000), ss2 = Math.round((ms2 % 60000) / 1000);
+      lastKmPaceStr = mm2 + ":" + String(ss2).padStart(2, "0");
+    }
+    if (curKm > lastKmMarker) { lastKmMarker = curKm; lastKmMarkerTime = now; }
+  }
 
   render(lastSk, lastDk, lastInc);
 }
@@ -313,6 +340,8 @@ function render(sk, dk, inc) {
     document.getElementById("gv").textContent = s + inc.toFixed(1) + "%";
   }
   document.getElementById("calv").textContent = Math.round(calAccum);
+  document.getElementById("lpv").textContent = useMetric ? lastKmPaceStr : lastMilePaceStr;
+  document.getElementById("lp-lbl").textContent = useMetric ? "last /km" : "last /mi";
 
   // Highlight matching grade button
   var activeGrade = inc !== null ? Math.round(inc) : null;
@@ -426,6 +455,8 @@ function onDC() {
   document.getElementById("ctrl-status").style.color = "var(--dim)";
   calAccum = 0; lastDataTime = 0;
   lastSk = 0; lastDk = null; lastInc = null; sessionStartDk = null;
+  lastMileMarker = 0; lastMileMarkerTime = null; lastMilePaceStr = "--:--";
+  lastKmMarker = 0; lastKmMarkerTime = null; lastKmPaceStr = "--:--";
   if (ti) clearInterval(ti);
   document.getElementById("sv").textContent = "0.0";
   document.getElementById("sv").classList.add("idle");
@@ -435,6 +466,7 @@ function onDC() {
   document.getElementById("cadv").textContent = "-- spm";
   document.getElementById("calv").textContent = "0";
   document.getElementById("tmv").textContent = "00:00";
+  document.getElementById("lpv").textContent = "--:--";
   showPanel("display");
   setTimeout(function() {
     ov.classList.remove("hidden");

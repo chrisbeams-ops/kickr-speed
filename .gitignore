@@ -1,0 +1,14 @@
+# Ignore common system and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+
+# Node modules (if any future JS tooling is added)
+node_modules/
+
+# Python environment (if added later)
+.venv/
+__pycache__/
+*.pyc
