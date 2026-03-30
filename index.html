@@ -209,11 +209,13 @@
   <button class="dc-btn" onclick="doDisconnect()">Disconnect</button>
   <button class="dc-btn" id="theme-btn" onclick="toggleTheme()">Light</button>
   <div class="timer" id="tm">00:00</div>
+  <div class="timer" id="ver"></div>
 </div>
 
 <script>
 var userWeightKg = parseFloat(localStorage.getItem("weightKg") || "70");
 applyTheme(localStorage.getItem("theme") || "light");
+var VERSION = "2026-03-30.1";
 var FTMS = 0x1826, TDATA = 0x2ACD, FTMS_CP = 0x2AD9;
 var RSC = 0x1814, RSC_MEAS = 0x2A53;
 var dev = null, st = null, ti = null, cpChar = null, hasControl = false;
@@ -506,6 +508,7 @@ function toggleTheme() {
 
 // Weight buttons
 document.getElementById("weight-val").textContent = userWeightKg + " kg";
+document.getElementById("ver").textContent = "v" + VERSION;
 function adjustWeight(delta) {
   var v = Math.min(250, Math.max(30, userWeightKg + delta));
   userWeightKg = v;
