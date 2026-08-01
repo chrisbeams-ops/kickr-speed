@@ -47,6 +47,10 @@
   .speed-label{font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
   .speed-num{font-weight:800;font-size:min(30vw,18vh,140px);line-height:1;color:var(--accent);text-shadow:0 0 40px var(--glow);transition:color 0.3s}
   .speed-num.idle{color:var(--text);text-shadow:none}
+  /* Off-target tint — must beat .idle when both could apply */
+  .speed-num.off{color:#ff9800;text-shadow:0 0 40px rgba(255,152,0,0.15)}
+  .target-hint{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-top:8px;min-height:15px;text-align:center}
+  .target-hint.hit{color:var(--accent)}
   .speed-unit{font-size:14px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--dim);margin-top:4px;cursor:pointer;-webkit-tap-highlight-color:transparent;border-bottom:1px dashed var(--border);transition:color 0.2s}
   .speed-unit:hover{color:var(--text)}
   .dv{width:32px;height:1px;background:var(--border);margin:8px 0}
@@ -82,6 +86,12 @@
   .speed-btn{font-family:"JetBrains Mono",monospace;font-size:18px;font-weight:800;color:var(--text);background:var(--border);border:2px solid transparent;border-radius:12px;padding:18px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.1s,color 0.1s,border-color 0.1s;text-align:center}
   .speed-btn:active{background:var(--accent);color:var(--bg)}
   .speed-btn.target{border-color:var(--accent);color:var(--accent)}
+
+  /* ── Target delta ── */
+  .delta{font-size:19px;font-weight:800;letter-spacing:1px;color:var(--dim);min-height:26px;text-align:center}
+  .delta.hit{color:var(--accent)}
+  .delta.up{color:#ff9800}
+  .delta.down{color:#42a5f5}
 
   /* ── Capability readout ── */
   .caps{width:100%;max-width:300px;font-size:10px;line-height:1.7;color:var(--dim);text-align:left;user-select:text}
@@ -148,6 +158,7 @@
       <div class="speed-label">Speed</div>
       <div class="speed-num idle" id="sv">0.0</div>
       <div class="speed-unit" id="unit-lbl" onclick="toggleUnit()">mph</div>
+      <div class="target-hint" id="target-hint"></div>
     </div>
     <div class="dv"></div>
     <div class="metrics">
@@ -187,30 +198,30 @@
 <div class="panel hidden" id="panel-speed">
   <div class="ctrl-stack">
     <div class="ctrl-section">
-      <div class="ctrl-label">Machine says</div>
-      <div class="caps" id="caps">connect to read capabilities</div>
-    </div>
-    <div class="ctrl-divider"></div>
-    <div class="ctrl-section">
-      <div class="ctrl-label">Target</div>
-      <div class="ctrl-val" id="target-val">-- <small id="target-unit">mph</small></div>
+      <div class="ctrl-label">Target pace</div>
+      <div class="ctrl-val" id="target-val">-- <small>mph</small></div>
+      <div class="delta" id="target-delta">pick a speed below</div>
       <div class="speed-grid" id="speed-grid"></div>
       <div class="ctrl-btns">
         <button class="ctrl-btn" onclick="nudgeSpeed(-1)">−</button>
         <button class="ctrl-btn" onclick="nudgeSpeed(1)">+</button>
       </div>
-      <div class="start-stop">
-        <button class="start-btn" onclick="startTreadmill()">Start</button>
-        <button class="stop-btn" onclick="stopTreadmill()">Stop</button>
-      </div>
+      <button class="dc-btn" onclick="clearTarget()">Clear target</button>
+      <div class="ctrl-note">The KICKR RUN will not accept speed commands, so this sets the belt on the console — the app just tells you when you have hit it.</div>
     </div>
     <div class="ctrl-divider"></div>
     <div class="ctrl-section">
-      <div class="ctrl-label">Control point log</div>
+      <div class="ctrl-label">Diagnostics</div>
+      <div class="caps" id="caps">connect to read capabilities</div>
       <div class="log" id="log"></div>
       <div class="ctrl-btns">
-        <button class="dc-btn" onclick="requestControl()">Request control</button>
-        <button class="dc-btn" onclick="clearLog()">Clear log</button>
+        <button class="dc-btn" onclick="requestControl()">Req control</button>
+        <button class="dc-btn" onclick="testSpeedWrite()">Test speed</button>
+        <button class="dc-btn" onclick="clearLog()">Clear</button>
+      </div>
+      <div class="start-stop">
+        <button class="start-btn" onclick="startTreadmill()">Start</button>
+        <button class="stop-btn" onclick="stopTreadmill()">Stop</button>
       </div>
     </div>
   </div>
@@ -408,6 +419,7 @@ function render(sk, dk, inc) {
   document.getElementById("calv").textContent = Math.round(calAccum);
   document.getElementById("lpv").textContent = useMetric ? lastKmPaceStr : lastMilePaceStr;
   document.getElementById("lp-lbl").textContent = useMetric ? "last /km" : "last /mi";
+  updateTargetReadout(sk);
 
   // Highlight matching grade button
   var activeGrade = inc !== null ? Math.round(inc) : null;
@@ -446,11 +458,19 @@ function fromKmh(k) { return useMetric ? k : k * 0.621371; }
 
 function setSpeedPreset(v) { applyTarget(toKmh(v)); }
 
+// Target is purely local — the machine rejects speed commands (0x2ACC bit 0 clear)
 function applyTarget(kmh) {
-  kmh = Math.min(MAX_KMH, Math.max(0, kmh));
-  targetKmh = kmh;
-  sendSpeed(kmh);
+  targetKmh = Math.min(MAX_KMH, Math.max(0, kmh));
+  localStorage.setItem("targetKmh", targetKmh);
   updateTargetUI();
+  updateTargetReadout(lastSk);
+}
+
+function clearTarget() {
+  targetKmh = null;
+  localStorage.removeItem("targetKmh");
+  updateTargetUI();
+  updateTargetReadout(lastSk);
 }
 
 // Nudge by 0.5 in whichever unit is on screen
@@ -468,6 +488,47 @@ function updateTargetUI() {
   document.querySelectorAll(".speed-btn").forEach(function(b) {
     b.classList.toggle("target", shown !== null && Math.abs(parseFloat(b.dataset.val) - shown) < 0.05);
   });
+}
+
+// Am I at the pace I picked? Drives the big number on the Display tab.
+function updateTargetReadout(sk) {
+  var hint = document.getElementById("target-hint");
+  var delta = document.getElementById("target-delta");
+  var sv = document.getElementById("sv");
+
+  if (targetKmh === null) {
+    hint.textContent = ""; hint.className = "target-hint";
+    delta.textContent = "pick a speed below"; delta.className = "delta";
+    sv.classList.remove("off");
+    return;
+  }
+
+  var tgt = fromKmh(targetKmh), act = fromKmh(sk);
+  var diff = act - tgt;                          // positive = running too fast
+  var tol = useMetric ? 0.25 : 0.15;
+  var unit = useMetric ? "km/h" : "mph";
+  var idle = sv.classList.contains("idle");
+
+  if (Math.abs(diff) <= tol) {
+    delta.textContent = "ON TARGET";
+    delta.className = "delta hit";
+    hint.textContent = "on target " + tgt.toFixed(1);
+    hint.className = "target-hint hit";
+    sv.classList.remove("off");
+  } else {
+    var up = diff < 0;
+    var gap = Math.abs(diff).toFixed(1);
+    delta.textContent = (up ? "↑ " : "↓ ") + gap + " " + unit + (up ? " faster" : " ease off");
+    delta.className = "delta " + (up ? "up" : "down");
+    hint.textContent = "target " + tgt.toFixed(1) + "  " + (up ? "↑" : "↓") + gap;
+    hint.className = "target-hint";
+    sv.classList.toggle("off", !idle);
+  }
+}
+
+// Diagnostic only — expected to come back "not supported"
+function testSpeedWrite() {
+  sendSpeed(targetKmh !== null ? targetKmh : 5);
 }
 
 // ── Capabilities: does the machine actually offer speed control? ──
@@ -614,8 +675,6 @@ function startTreadmill() {
 
 function stopTreadmill() {
   writeCP(new Uint8Array([0x08, 0x01]));
-  targetKmh = null;
-  updateTargetUI();
 }
 
 // Panel switching
@@ -638,8 +697,8 @@ function onDC() {
   lastSk = 0; lastDk = null; lastInc = null; sessionStartDk = null;
   lastMileMarker = 0; lastMileMarkerTime = null; lastMilePaceStr = "--:--";
   lastKmMarker = 0; lastKmMarkerTime = null; lastKmPaceStr = "--:--";
-  targetKmh = null;
-  updateTargetUI();
+  updateTargetUI();          // keep the chosen target across a reconnect
+  updateTargetReadout(0);
   log("disconnected", "bad");
   if (ti) clearInterval(ti);
   document.getElementById("sv").textContent = "0.0";
@@ -707,8 +766,11 @@ function launchPopup(pw, ph) {
   if (!popup) alert("Popup blocked - please allow popups for this site.");
 }
 
+var savedTarget = parseFloat(localStorage.getItem("targetKmh"));
+if (!isNaN(savedTarget)) targetKmh = savedTarget;
 buildSpeedGrid();
 updateTargetUI();
+updateTargetReadout(0);
 </script>
 </body>
 </html>
