@@ -118,6 +118,23 @@ the Wahoo app driving the machine (Android HCI snoop log, or PacketLogger on
 iOS) during a planned workout with pace targets, then match writes to observed
 behaviour.
 
+## Prior art — none
+
+Checked 2026-08-01:
+
+- qdomyos-zwift, the most complete open treadmill-control project, has no
+  KICKR RUN driver (`src/devices` has `wahookickrheadwind` and
+  `wahookickrsnapbike` only).
+- GitHub code search for `a026e018`, `a026e023`, `a026e03e`, `a026ee06` and
+  `a026ee0e` returns only false positives — Tasmota firmware hex blobs and
+  binary game assets where the characters coincidentally appear.
+- The community-documented Wahoo trainer control characteristic is `a026e005`,
+  which this treadmill does not expose. That work does not transfer.
+
+The command formats cannot be derived from telemetry. The only route is
+capturing the Wahoo app's writes — which is also how the trainer protocol was
+originally worked out.
+
 ## Open questions
 
 - Does incline (`0x03`) succeed with the belt running? Never tested.
