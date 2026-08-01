@@ -151,10 +151,64 @@ document.getElementById("go").addEventListener("click", async function() {
   }
 });
 
+// a026e03d ships a 24-byte record as a 20-byte notification plus a 4-byte
+// remainder (ATT MTU 23). Reassemble, then decode what we understand.
+var e03dBuf = null;
+
+function decodeE03D(dv) {
+  var b = new Uint8Array(dv.buffer);
+  if (b.length === 20) { e03dBuf = b; return null; }        // first fragment
+  if (b.length === 4 && e03dBuf) {
+    var full = new Uint8Array(24);
+    full.set(e03dBuf, 0); full.set(b, 20);
+    e03dBuf = null;
+    var d = new DataView(full.buffer);
+    var umps = d.getUint32(2, true);
+    var kmh = (umps / 1e6) * 3.6;
+    return "speed " + kmh.toFixed(2) + " km/h (" + (kmh * 0.621371).toFixed(2) + " mph)" +
+           "   counter " + d.getUint32(6, true) +
+           "   f12 " + d.getUint16(12, true) +
+           "   f14 " + d.getUint16(14, true) +
+           "   f16 " + d.getInt16(16, true) +
+           "   f18 " + d.getInt16(18, true);
+  }
+  return null;
+}
+
+function decodeFTMS(dv) {
+  if (dv.byteLength < 4) return null;
+  var f = dv.getUint16(0, true), o = 2, parts = [];
+  if (!(f & 0x01)) { parts.push("speed " + (dv.getUint16(o, true) / 100).toFixed(2) + " km/h"); o += 2; }
+  if (f & 0x02) o += 2;
+  if (f & 0x04) {
+    parts.push("dist " + (dv.getUint8(o) | (dv.getUint8(o+1) << 8) | (dv.getUint8(o+2) << 16)) + " m");
+    o += 3;
+  }
+  if (f & 0x08) { parts.push("incline " + (dv.getInt16(o, true) / 10).toFixed(1) + "%"); o += 4; }
+  return parts.join("   ");
+}
+
+function decodeRSC(dv) {
+  if (dv.byteLength < 4) return null;
+  var f = dv.getUint8(0), o = 1, parts = [];
+  parts.push("speed " + (dv.getUint16(o, true) / 256 * 3.6).toFixed(2) + " km/h"); o += 2;
+  parts.push("cadence " + dv.getUint8(o) + " spm"); o += 1;
+  if (f & 0x01) { parts.push("stride " + dv.getUint16(o, true) + " cm"); o += 2; }
+  if (f & 0x02) { parts.push("dist " + (dv.getUint32(o, true) / 10).toFixed(1) + " m"); }
+  return parts.join("   ");
+}
+
 function makeLogger(uuid) {
   return function(e) {
     var t = new Date().toTimeString().slice(0, 8);
-    put(t + "  NOTIFY " + shortUuid(uuid) + "  " + hex(e.target.value), "notif");
+    var dv = e.target.value, decoded = null;
+    try {
+      if (uuid.indexOf("a026e03d") === 0) decoded = decodeE03D(dv);
+      else if (uuid.indexOf("00002acd") === 0) decoded = decodeFTMS(dv);
+      else if (uuid.indexOf("00002a53") === 0) decoded = decodeRSC(dv);
+    } catch (x) {}
+    put(t + "  NOTIFY " + shortUuid(uuid) + "  " + hex(dv), "notif");
+    if (decoded) put("        " + decoded, "val");
   };
 }
 
