@@ -88,6 +88,9 @@
   .speed-btn.target{border-color:var(--accent);color:var(--accent)}
 
   /* ── Target delta ── */
+  .belt{font-size:10px;letter-spacing:1px;color:var(--dim);margin-top:-4px}
+  .cue-btn{font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:700;letter-spacing:1px;color:var(--dim);background:none;border:1px solid var(--border);padding:6px 10px;border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .cue-btn.on{color:var(--accent);border-color:var(--accent)}
   .delta{font-size:19px;font-weight:800;letter-spacing:1px;color:var(--dim);min-height:26px;text-align:center}
   .delta.hit{color:var(--accent)}
   .delta.up{color:#ff9800}
@@ -200,14 +203,18 @@
     <div class="ctrl-section">
       <div class="ctrl-label">Target pace</div>
       <div class="ctrl-val" id="target-val">-- <small>mph</small></div>
+      <div class="belt" id="target-belt"></div>
       <div class="delta" id="target-delta">pick a speed below</div>
       <div class="speed-grid" id="speed-grid"></div>
       <div class="ctrl-btns">
         <button class="ctrl-btn" onclick="nudgeSpeed(-1)">−</button>
         <button class="ctrl-btn" onclick="nudgeSpeed(1)">+</button>
       </div>
-      <button class="dc-btn" onclick="clearTarget()">Clear target</button>
-      <div class="ctrl-note">The KICKR RUN will not accept speed commands, so this sets the belt on the console — the app just tells you when you have hit it.</div>
+      <div class="ctrl-btns" style="justify-content:center">
+        <button class="cue-btn" id="cue-btn" onclick="toggleCues()">Cues: on</button>
+        <button class="cue-btn" onclick="clearTarget()">Clear target</button>
+      </div>
+      <div class="ctrl-note">Paddle until it beeps. Low beeps mean speed up, high beeps mean ease off, and they quicken as you close in — a two-note chime means you are there.</div>
     </div>
     <div class="ctrl-divider"></div>
     <div class="ctrl-section">
@@ -458,10 +465,16 @@ function fromKmh(k) { return useMetric ? k : k * 0.621371; }
 
 function setSpeedPreset(v) { applyTarget(toKmh(v)); }
 
-// Target is purely local — the machine rejects speed commands (0x2ACC bit 0 clear)
+// Target is purely local — the machine rejects speed commands (0x2ACC bit 0 clear).
+// Snapped to the belt's 0.1 km/h step so she is not chasing an unreachable number:
+// 8.00 mph is 12.87 km/h, which the belt cannot hold — 12.9 km/h (8.02 mph) is the
+// nearest real speed, and that difference is exactly what makes paddling feel futile.
 function applyTarget(kmh) {
-  targetKmh = Math.min(MAX_KMH, Math.max(0, kmh));
+  var clamped = Math.min(MAX_KMH, Math.max(0, kmh));
+  targetKmh = Math.round(clamped * 10) / 10;
   localStorage.setItem("targetKmh", targetKmh);
+  ensureAudio();          // this call is inside a tap, so audio is allowed to start
+  armCues();
   updateTargetUI();
   updateTargetReadout(lastSk);
 }
@@ -485,10 +498,87 @@ function updateTargetUI() {
   var shown = targetKmh === null ? null : fromKmh(targetKmh);
   el.innerHTML = (shown === null ? "--" : shown.toFixed(1)) +
                  ' <small>' + (useMetric ? "km/h" : "mph") + '</small>';
+  document.getElementById("target-belt").textContent =
+    targetKmh === null ? "" : "belt " + targetKmh.toFixed(1) + " km/h";
   document.querySelectorAll(".speed-btn").forEach(function(b) {
-    b.classList.toggle("target", shown !== null && Math.abs(parseFloat(b.dataset.val) - shown) < 0.05);
+    b.classList.toggle("target", shown !== null && Math.abs(parseFloat(b.dataset.val) - shown) < 0.06);
   });
 }
+
+// ── Audio cues ─────────────────────────────────────────────────
+// The paddles are imprecise, so the ear does the aiming: low beep = speed up,
+// high beep = ease off, quickening as she closes in, two-note chime on arrival.
+// Silence means she is on target — cues disarm once she has held it, so they
+// guide her in and then get out of the way for the rest of the run.
+var audioCtx = null;
+var cuesOn = localStorage.getItem("cues") !== "off";
+var cuesArmed = false, lastBeepAt = 0, onTargetSince = null, arrivalPlayed = false;
+var curDiff = null, curTol = 0.15;
+
+function ensureAudio() {
+  try {
+    if (!audioCtx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      audioCtx = new AC();
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  } catch (x) { audioCtx = null; }
+}
+
+function beep(freq, ms, vol) {
+  if (!audioCtx) return;
+  try {
+    var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = "sine";
+    o.frequency.value = freq;
+    o.connect(g); g.connect(audioCtx.destination);
+    var t = audioCtx.currentTime, dur = ms / 1000;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol || 0.3, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.start(t); o.stop(t + dur + 0.03);
+  } catch (x) {}
+}
+
+function armCues() {
+  cuesArmed = true; arrivalPlayed = false; onTargetSince = null;
+}
+
+function toggleCues() {
+  cuesOn = !cuesOn;
+  localStorage.setItem("cues", cuesOn ? "on" : "off");
+  if (cuesOn) { ensureAudio(); armCues(); }
+  var b = document.getElementById("cue-btn");
+  b.textContent = "Cues: " + (cuesOn ? "on" : "off");
+  b.classList.toggle("on", cuesOn);
+}
+
+// Polled faster than the 2 Hz notification rate so the beep interval can be short
+function cueTick() {
+  if (!cuesOn || !cuesArmed || !audioCtx || curDiff === null) return;
+  if (lastSk < 0.5) return;                      // belt not moving yet — stay quiet
+  var now = Date.now(), gap = Math.abs(curDiff);
+
+  if (gap <= curTol) {
+    if (!arrivalPlayed) {
+      beep(880, 110);
+      setTimeout(function() { beep(1320, 170); }, 130);
+      arrivalPlayed = true;
+      onTargetSince = now;
+    }
+    if (onTargetSince && now - onTargetSince > 2500) cuesArmed = false;  // stop nagging
+    return;
+  }
+
+  arrivalPlayed = false; onTargetSince = null;
+  var interval = Math.min(1200, Math.max(170, gap * 700));
+  if (now - lastBeepAt >= interval) {
+    lastBeepAt = now;
+    beep(curDiff < 0 ? 430 : 1150, 65);          // low = go faster, high = ease off
+  }
+}
+setInterval(cueTick, 50);
 
 // Am I at the pace I picked? Drives the big number on the Display tab.
 function updateTargetReadout(sk) {
@@ -500,12 +590,14 @@ function updateTargetReadout(sk) {
     hint.textContent = ""; hint.className = "target-hint";
     delta.textContent = "pick a speed below"; delta.className = "delta";
     sv.classList.remove("off");
+    curDiff = null;
     return;
   }
 
   var tgt = fromKmh(targetKmh), act = fromKmh(sk);
   var diff = act - tgt;                          // positive = running too fast
   var tol = useMetric ? 0.25 : 0.15;
+  curDiff = diff; curTol = tol;
   var unit = useMetric ? "km/h" : "mph";
   var idle = sv.classList.contains("idle");
 
@@ -771,6 +863,9 @@ if (!isNaN(savedTarget)) targetKmh = savedTarget;
 buildSpeedGrid();
 updateTargetUI();
 updateTargetReadout(0);
+var cueBtn = document.getElementById("cue-btn");
+cueBtn.textContent = "Cues: " + (cuesOn ? "on" : "off");
+cueBtn.classList.toggle("on", cuesOn);
 </script>
 </body>
 </html>
