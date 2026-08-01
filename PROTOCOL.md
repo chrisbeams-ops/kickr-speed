@@ -39,9 +39,10 @@ Feature flags decode as:
 
 Confirmed empirically: `02 E3 01` (set speed 4.83 km/h) → `80 02 02`, op code
 not supported. Same for a second value, so it is the opcode and not the range.
-Incline `03 0A 00` → `80 03 04` operation failed, but that was with the belt
-stopped and is probably a state condition rather than a capability limit —
-untested with the belt running.
+Incline `03 0A 00` → `80 03 04` operation failed with the belt **stopped**.
+With the belt **running** it succeeds (tested 2026-08-01). So incline control
+requires an active deck; the failure was a state condition, not a capability
+limit.
 
 `0x2ACD` layout as observed (flags `0x000C`):
 
@@ -137,7 +138,6 @@ originally worked out.
 
 ## Open questions
 
-- Does incline (`0x03`) succeed with the belt running? Never tested.
 - Is firmware `2.0.43` current?
 - Which of the five write characteristics carries pace targets, and does the
   treadmill still require the physical paddle confirmation regardless?
