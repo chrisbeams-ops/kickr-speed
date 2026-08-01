@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>KICKR Run Speed — TEST</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧪</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{--bg:#0a0a0c;--border:#1e1e24;--text:#e8e8ec;--dim:#55555f;--accent:#00e676;--glow:rgba(0,230,118,0.12)}
+  body.light{--bg:#f0f0f2;--border:#d0d0d8;--text:#1a1a1e;--dim:#8a8a9a;--accent:#00a854;--glow:rgba(0,168,84,0.1)}
+  body{font-family:"JetBrains Mono",monospace;background:var(--bg);color:var(--text);height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased;user-select:none}
+
+  /* Test banner — so this is never mistaken for the real app */
+  .testbar{background:#ff9800;color:#000;font-size:9px;font-weight:800;letter-spacing:2px;text-transform:uppercase;text-align:center;padding:4px;flex-shrink:0}
+
+  /* Status dot */
+  .dot{position:fixed;top:26px;right:10px;width:8px;height:8px;border-radius:50%;background:var(--dim);box-shadow:none;z-index:10;transition:all 0.3s}
+  .dot.on{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+
+  /* ── Connect overlay ── */
+  .overlay{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:20;padding:24px}
+  .overlay.hidden{display:none}
+  .overlay h2{font-size:16px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
+  .overlay p{font-size:12px;color:var(--dim);text-align:center;line-height:1.5;max-width:300px}
+  .cbtn{font-family:"JetBrains Mono",monospace;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--bg);background:var(--accent);border:none;padding:14px 32px;border-radius:10px;cursor:pointer;box-shadow:0 4px 20px rgba(0,230,118,0.25);-webkit-tap-highlight-color:transparent;transition:transform 0.15s}
+  .cbtn:hover{transform:translateY(-1px)}
+  .cbtn:disabled{opacity:0.5;transform:none}
+  .err{font-size:11px;color:#ff5252;text-align:center;max-width:280px;line-height:1.4}
+  .hint{font-size:10px;color:#3a3a42;text-align:center;line-height:1.4;max-width:260px}
+
+  /* Desktop popup launcher */
+  .popup-row{display:none;align-items:center;gap:10px}
+  .popup-btn{font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:700;color:var(--dim);background:var(--bg);border:1px solid var(--border);padding:8px 14px;border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .popup-btn:hover{border-color:var(--accent);color:var(--text)}
+
+  /* ── Panels ── */
+  .panel{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+  .panel.hidden{display:none}
+
+  /* ── Display panel ── */
+  .stack{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 8px;gap:4px}
+  .speed{display:flex;flex-direction:column;align-items:center;padding:12px 0}
+  .speed-label{font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+  .speed-num{font-weight:800;font-size:min(30vw,18vh,140px);line-height:1;color:var(--accent);text-shadow:0 0 40px var(--glow);transition:color 0.3s}
+  .speed-num.idle{color:var(--text);text-shadow:none}
+  .speed-unit{font-size:14px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--dim);margin-top:4px;cursor:pointer;-webkit-tap-highlight-color:transparent;border-bottom:1px dashed var(--border);transition:color 0.2s}
+  .speed-unit:hover{color:var(--text)}
+  .dv{width:32px;height:1px;background:var(--border);margin:8px 0}
+  .metrics{display:flex;gap:20px;padding:8px 0;flex-wrap:wrap;justify-content:center}
+  .mini{display:flex;flex-direction:column;align-items:center}
+  .mini-val{font-weight:700;font-size:min(8vw,5vh,28px);line-height:1.2;color:var(--text)}
+  .mini-lbl{font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-top:2px}
+
+  /* ── Control panel ── */
+  .ctrl-stack{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:20px;padding:20px 24px;overflow-y:auto}
+  .ctrl-section{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;max-width:300px}
+  .ctrl-label{font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--dim)}
+  .ctrl-val{font-size:36px;font-weight:800;color:var(--text);line-height:1}
+  .ctrl-val small{font-size:13px;font-weight:700;color:var(--dim);letter-spacing:2px}
+  .ctrl-btns{display:flex;gap:10px;width:100%}
+  .ctrl-btn{flex:1;font-family:"JetBrains Mono",monospace;font-size:24px;font-weight:700;color:var(--text);background:var(--border);border:none;border-radius:12px;padding:18px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.1s,color 0.1s}
+  .ctrl-btn:active{background:var(--accent);color:var(--bg)}
+  .ctrl-divider{width:100%;max-width:300px;height:1px;background:var(--border)}
+  .start-stop{display:flex;gap:10px;width:100%;max-width:300px}
+  .start-btn,.stop-btn{flex:1;font-family:"JetBrains Mono",monospace;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;background:none;border-radius:10px;padding:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.15s,color 0.15s}
+  .start-btn{color:var(--accent);border:2px solid var(--accent)}
+  .start-btn:active{background:var(--accent);color:var(--bg)}
+  .stop-btn{color:#ff5252;border:2px solid #ff5252}
+  .stop-btn:active{background:#ff5252;color:var(--bg)}
+  .ctrl-note{font-size:9px;color:#3a3a42;text-align:center;max-width:260px;line-height:1.5}
+  .grade-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%;max-width:300px}
+  .grade-btn{font-family:"JetBrains Mono",monospace;font-size:14px;font-weight:700;color:var(--text);background:var(--border);border:2px solid transparent;border-radius:10px;padding:14px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.1s,color 0.1s,border-color 0.1s;text-align:center}
+  .grade-btn:active{background:var(--accent);color:var(--bg)}
+  .grade-btn.active{border-color:var(--accent);color:var(--accent)}
+
+  /* ── Speed presets ── */
+  .speed-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;max-width:300px}
+  .speed-btn{font-family:"JetBrains Mono",monospace;font-size:18px;font-weight:800;color:var(--text);background:var(--border);border:2px solid transparent;border-radius:12px;padding:18px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.1s,color 0.1s,border-color 0.1s;text-align:center}
+  .speed-btn:active{background:var(--accent);color:var(--bg)}
+  .speed-btn.target{border-color:var(--accent);color:var(--accent)}
+
+  /* ── Capability readout ── */
+  .caps{width:100%;max-width:300px;font-size:10px;line-height:1.7;color:var(--dim);text-align:left;user-select:text}
+  .caps .yes{color:var(--accent);font-weight:700}
+  .caps .no{color:#ff5252;font-weight:700}
+
+  /* ── Debug log ── */
+  .log{width:100%;max-width:300px;font-family:"JetBrains Mono",monospace;font-size:9px;line-height:1.6;color:var(--dim);background:rgba(127,127,127,0.06);border:1px solid var(--border);border-radius:8px;padding:8px;height:130px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;user-select:text}
+  .log .ok{color:var(--accent)}
+  .log .bad{color:#ff5252}
+
+  /* ── Tabs ── */
+  .tabs{display:flex;background:var(--bg);border-top:1px solid var(--border);flex-shrink:0}
+  .tabs.hidden{display:none}
+  .tab{flex:1;font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim);background:none;border:none;padding:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:color 0.2s}
+  .tab.active{color:var(--accent)}
+
+  /* ── Footer ── */
+  .footer{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;flex-shrink:0}
+  .dc-btn{font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:600;color:var(--dim);background:none;border:1px solid var(--border);padding:6px 10px;border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:color 0.2s,border-color 0.2s}
+  .dc-btn:hover{color:#ff5252;border-color:#ff5252}
+  .timer{font-size:11px;color:var(--dim);letter-spacing:1px}
+  .footer.hidden{display:none}
+
+  /* Desktop: show popup option */
+  @media (min-width:600px) and (hover:hover) {
+    .popup-row{display:flex}
+  }
+
+  /* Landscape: speed left, metrics 3-col right */
+  @media (orientation:landscape) and (max-height:500px) {
+    .stack{flex-direction:row;align-items:center;justify-content:center;gap:32px;padding:8px 24px}
+    .speed{padding:0}
+    .speed-num{font-size:min(22vw,30vh,120px)}
+    .dv{width:1px;height:80px;margin:0}
+    .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 24px;padding:0}
+    .mini-val{font-size:min(6vw,7vh,28px)}
+  }
+</style>
+</head>
+<body>
+
+<div class="testbar">Test build — speed control</div>
+<div class="dot" id="dot"></div>
+
+<!-- Connect overlay -->
+<div class="overlay" id="ov">
+  <h2>KICKR Run — Test</h2>
+  <p>Test build for <strong>speed control</strong>. Everything else matches the main app.</p>
+  <button class="cbtn" id="cb">Connect</button>
+  <div class="err" id="err" style="display:none"></div>
+  <div class="popup-row" id="popupRow">
+    <span style="font-size:10px;color:#3a3a42">or</span>
+    <button class="popup-btn" onclick="launchPopup(140,620)">Launch as slim panel</button>
+  </div>
+  <div class="hint">iPhone: use Bluefy browser<br>Desktop: use Chrome or Edge</div>
+  <button class="dc-btn" id="theme-btn-ov" onclick="toggleTheme()" style="margin-top:4px">Light</button>
+</div>
+
+<!-- Display panel -->
+<div class="panel" id="panel-display">
+  <div class="stack">
+    <div class="speed">
+      <div class="speed-label">Speed</div>
+      <div class="speed-num idle" id="sv">0.0</div>
+      <div class="speed-unit" id="unit-lbl" onclick="toggleUnit()">mph</div>
+    </div>
+    <div class="dv"></div>
+    <div class="metrics">
+      <div class="mini">
+        <div class="mini-val" id="pv">--:--</div>
+        <div class="mini-lbl" id="pace-lbl">pace /mi</div>
+      </div>
+      <div class="mini">
+        <div class="mini-val" id="dval">0.00</div>
+        <div class="mini-lbl" id="dist-lbl">miles</div>
+      </div>
+      <div class="mini">
+        <div class="mini-val" id="gv">0%</div>
+        <div class="mini-lbl">grade</div>
+      </div>
+      <div class="mini">
+        <div class="mini-val" id="cadv">-- spm</div>
+        <div class="mini-lbl">cadence</div>
+      </div>
+      <div class="mini">
+        <div class="mini-val" id="tmv">00:00</div>
+        <div class="mini-lbl">time</div>
+      </div>
+      <div class="mini">
+        <div class="mini-val" id="lpv">--:--</div>
+        <div class="mini-lbl" id="lp-lbl">last /mi</div>
+      </div>
+      <div class="mini">
+        <div class="mini-val" id="calv">0</div>
+        <div class="mini-lbl">~cal</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Speed panel -->
+<div class="panel hidden" id="panel-speed">
+  <div class="ctrl-stack">
+    <div class="ctrl-section">
+      <div class="ctrl-label">Machine says</div>
+      <div class="caps" id="caps">connect to read capabilities</div>
+    </div>
+    <div class="ctrl-divider"></div>
+    <div class="ctrl-section">
+      <div class="ctrl-label">Target</div>
+      <div class="ctrl-val" id="target-val">-- <small id="target-unit">mph</small></div>
+      <div class="speed-grid" id="speed-grid"></div>
+      <div class="ctrl-btns">
+        <button class="ctrl-btn" onclick="nudgeSpeed(-1)">−</button>
+        <button class="ctrl-btn" onclick="nudgeSpeed(1)">+</button>
+      </div>
+      <div class="start-stop">
+        <button class="start-btn" onclick="startTreadmill()">Start</button>
+        <button class="stop-btn" onclick="stopTreadmill()">Stop</button>
+      </div>
+    </div>
+    <div class="ctrl-divider"></div>
+    <div class="ctrl-section">
+      <div class="ctrl-label">Control point log</div>
+      <div class="log" id="log"></div>
+      <div class="ctrl-btns">
+        <button class="dc-btn" onclick="requestControl()">Request control</button>
+        <button class="dc-btn" onclick="clearLog()">Clear log</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Control panel -->
+<div class="panel hidden" id="panel-control">
+  <div class="ctrl-stack">
+    <div class="ctrl-section">
+      <div class="ctrl-label">Grade</div>
+      <div class="grade-grid" id="grade-grid">
+        <button class="grade-btn" data-grade="-3" onclick="setGrade(-3)">−3%</button>
+        <button class="grade-btn" data-grade="-2" onclick="setGrade(-2)">−2%</button>
+        <button class="grade-btn" data-grade="-1" onclick="setGrade(-1)">−1%</button>
+        <button class="grade-btn" data-grade="0"  onclick="setGrade(0)">0%</button>
+        <button class="grade-btn" data-grade="1"  onclick="setGrade(1)">+1%</button>
+        <button class="grade-btn" data-grade="2"  onclick="setGrade(2)">+2%</button>
+        <button class="grade-btn" data-grade="3"  onclick="setGrade(3)">+3%</button>
+        <button class="grade-btn" data-grade="4"  onclick="setGrade(4)">+4%</button>
+        <button class="grade-btn" data-grade="5"  onclick="setGrade(5)">+5%</button>
+        <button class="grade-btn" data-grade="6"  onclick="setGrade(6)">+6%</button>
+        <button class="grade-btn" data-grade="7"  onclick="setGrade(7)">+7%</button>
+        <button class="grade-btn" data-grade="8"  onclick="setGrade(8)">+8%</button>
+        <button class="grade-btn" data-grade="10" onclick="setGrade(10)">+10%</button>
+        <button class="grade-btn" data-grade="12" onclick="setGrade(12)">+12%</button>
+        <button class="grade-btn" data-grade="15" onclick="setGrade(15)">+15%</button>
+      </div>
+    </div>
+    <div class="ctrl-divider"></div>
+    <div class="ctrl-section">
+      <div class="ctrl-label">Weight (~cal)</div>
+      <div class="ctrl-btns">
+        <button class="ctrl-btn" onclick="adjustWeight(-1)">−</button>
+        <div class="ctrl-val" id="weight-val" style="min-width:80px;text-align:center">70 kg</div>
+        <button class="ctrl-btn" onclick="adjustWeight(1)">+</button>
+      </div>
+    </div>
+    <div class="ctrl-note">Control: <span id="ctrl-status" style="color:var(--dim)">waiting…</span></div>
+  </div>
+</div>
+
+<!-- Tab bar -->
+<nav class="tabs hidden" id="tabs">
+  <button class="tab active" id="tab-display" onclick="showPanel('display')">Display</button>
+  <button class="tab" id="tab-speed" onclick="showPanel('speed')">Speed</button>
+  <button class="tab" id="tab-control" onclick="showPanel('control')">Control</button>
+</nav>
+
+<!-- Footer -->
+<div class="footer hidden" id="footer">
+  <button class="dc-btn" onclick="doDisconnect()">Disconnect</button>
+  <button class="dc-btn" id="theme-btn" onclick="toggleTheme()">Light</button>
+  <div class="timer" id="tm">00:00</div>
+  <div class="timer" id="ver"></div>
+</div>
+
+<script>
+var userWeightKg = parseFloat(localStorage.getItem("weightKg") || "70");
+applyTheme(localStorage.getItem("theme") || "light");
+var VERSION = "2026-08-01.test1";
+var FTMS = 0x1826, TDATA = 0x2ACD, FTMS_CP = 0x2AD9;
+var FTMS_FEATURE = 0x2ACC, SPEED_RANGE = 0x2AD4, INCL_RANGE = 0x2AD5;
+var RSC = 0x1814, RSC_MEAS = 0x2A53;
+var dev = null, st = null, ti = null, cpChar = null, hasControl = false;
+var useMetric = false;
+var lastSk = 0, lastDk = null, lastInc = null, sessionStartDk = null;
+var calAccum = 0, lastDataTime = 0;
+var lastMileMarker = 0, lastMileMarkerTime = null, lastMilePaceStr = "--:--";
+var lastKmMarker = 0, lastKmMarkerTime = null, lastKmPaceStr = "--:--";
+
+// Speed control
+var MAX_KMH = 20;                                    // KICKR Run tops out at 20 km/h
+var MPH_PRESETS = [2,3,4,5,6,7,8,9,10,11,12];
+var KMH_PRESETS = [3,4,5,6,8,10,12,14,16,18,20];
+var targetKmh = null;
+
+var cb = document.getElementById("cb");
+var ov = document.getElementById("ov");
+var er = document.getElementById("err");
+var dt = document.getElementById("dot");
+var ft = document.getElementById("footer");
+var tabs = document.getElementById("tabs");
+
+if (!navigator.bluetooth) {
+  cb.disabled = true;
+  er.textContent = "Web Bluetooth not available. On iPhone use Bluefy browser. On desktop use Chrome.";
+  er.style.display = "block";
+}
+
+// Connect
+cb.addEventListener("click", async function() {
+  er.style.display = "none";
+  cb.textContent = "Connecting...";
+  cb.disabled = true;
+  try {
+    dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [FTMS] }] });
+    dev.addEventListener("gattserverdisconnected", onDC);
+    var srv = await dev.gatt.connect();
+    var svc = await srv.getPrimaryService(FTMS);
+    var ch = await svc.getCharacteristic(TDATA);
+    await ch.startNotifications();
+    ch.addEventListener("characteristicvaluechanged", onD);
+    tryRSC(srv);
+    readCaps(svc);
+    tryCP(svc);
+    ov.classList.add("hidden");
+    dt.classList.add("on");
+    ft.classList.remove("hidden");
+    tabs.classList.remove("hidden");
+    st = Date.now();
+    ti = setInterval(uT, 1000);
+    if ("wakeLock" in navigator) {
+      try { await navigator.wakeLock.request("screen"); } catch(x) {}
+    }
+  } catch(e) {
+    er.textContent = e.message || "Connection failed";
+    er.style.display = "block";
+    cb.textContent = "Connect";
+    cb.disabled = false;
+  }
+});
+
+// Parse FTMS treadmill data
+function onD(e) {
+  var d = e.target.value;
+  var f = d.getUint16(0, true), o = 2;
+  lastSk = 0; lastDk = null; lastInc = null;
+
+  if (!(f & 0x01)) { lastSk = d.getUint16(o, true) * 0.01; o += 2; }
+  if (f & 0x02) o += 2;
+  if (f & 0x04) {
+    var dm = d.getUint8(o) | (d.getUint8(o+1) << 8) | (d.getUint8(o+2) << 16);
+    lastDk = dm / 1000;
+    if (sessionStartDk === null) { sessionStartDk = lastDk; lastMileMarkerTime = Date.now(); lastKmMarkerTime = Date.now(); }
+    o += 3;
+  }
+  if (f & 0x08) { lastInc = d.getInt16(o, true) * 0.1; o += 4; }
+
+  // Accumulate calories (ACSM formula)
+  var now = Date.now();
+  if (lastDataTime > 0 && lastSk > 0) {
+    var dtMin = (now - lastDataTime) / 60000;
+    var spdMpm = lastSk * 1000 / 60;
+    var gradeDec = (lastInc || 0) / 100;
+    var vo2 = 0.2 * spdMpm + 0.9 * spdMpm * gradeDec + 3.5;
+    calAccum += vo2 * (userWeightKg * 5 / 1000) * dtMin;
+  }
+  lastDataTime = now;
+
+  // Detect mile/km completions
+  if (lastDk !== null && sessionStartDk !== null) {
+    var sDkMi = (lastDk - sessionStartDk) * 0.621371;
+    var curMile = Math.floor(sDkMi);
+    if (curMile > lastMileMarker && lastMileMarkerTime !== null) {
+      var ms = now - lastMileMarkerTime;
+      var mm = Math.floor(ms / 60000), ss = Math.round((ms % 60000) / 1000);
+      lastMilePaceStr = mm + ":" + String(ss).padStart(2, "0");
+    }
+    if (curMile > lastMileMarker) { lastMileMarker = curMile; lastMileMarkerTime = now; }
+
+    var sDkKm = lastDk - sessionStartDk;
+    var curKm = Math.floor(sDkKm);
+    if (curKm > lastKmMarker && lastKmMarkerTime !== null) {
+      var ms2 = now - lastKmMarkerTime;
+      var mm2 = Math.floor(ms2 / 60000), ss2 = Math.round((ms2 % 60000) / 1000);
+      lastKmPaceStr = mm2 + ":" + String(ss2).padStart(2, "0");
+    }
+    if (curKm > lastKmMarker) { lastKmMarker = curKm; lastKmMarkerTime = now; }
+  }
+
+  render(lastSk, lastDk, lastInc);
+}
+
+function render(sk, dk, inc) {
+  var speed = useMetric ? sk : sk * 0.621371;
+  var sv = document.getElementById("sv");
+  sv.textContent = speed.toFixed(1);
+  sv.classList.toggle("idle", speed < (useMetric ? 0.8 : 0.5));
+
+  if (speed > (useMetric ? 0.5 : 0.3)) {
+    var mpm = 60 / speed, pm = Math.floor(mpm), ps = Math.round((mpm - pm) * 60);
+    document.getElementById("pv").textContent = pm + ":" + String(ps).padStart(2, "0");
+  } else {
+    document.getElementById("pv").textContent = "--:--";
+  }
+
+  if (dk !== null) {
+    var sessionDk = dk - (sessionStartDk || 0);
+    document.getElementById("dval").textContent = (useMetric ? sessionDk : sessionDk * 0.621371).toFixed(2);
+  }
+  if (inc !== null) {
+    var s = inc > 0 ? "+" : "";
+    document.getElementById("gv").textContent = s + inc.toFixed(1) + "%";
+  }
+  document.getElementById("calv").textContent = Math.round(calAccum);
+  document.getElementById("lpv").textContent = useMetric ? lastKmPaceStr : lastMilePaceStr;
+  document.getElementById("lp-lbl").textContent = useMetric ? "last /km" : "last /mi";
+
+  // Highlight matching grade button
+  var activeGrade = inc !== null ? Math.round(inc) : null;
+  document.querySelectorAll(".grade-btn").forEach(function(btn) {
+    btn.classList.toggle("active", parseInt(btn.dataset.grade) === activeGrade);
+  });
+}
+
+function toggleUnit() {
+  useMetric = !useMetric;
+  document.getElementById("unit-lbl").textContent = useMetric ? "km/h" : "mph";
+  document.getElementById("dist-lbl").textContent = useMetric ? "km" : "miles";
+  document.getElementById("pace-lbl").textContent = useMetric ? "pace /km" : "pace /mi";
+  buildSpeedGrid();
+  updateTargetUI();
+  render(lastSk, lastDk, lastInc);
+}
+
+// ── Speed presets ──────────────────────────────────────────────
+function buildSpeedGrid() {
+  var grid = document.getElementById("speed-grid");
+  var presets = useMetric ? KMH_PRESETS : MPH_PRESETS;
+  grid.innerHTML = "";
+  presets.forEach(function(v) {
+    var b = document.createElement("button");
+    b.className = "speed-btn";
+    b.textContent = v;
+    b.dataset.val = v;
+    b.onclick = function() { setSpeedPreset(v); };
+    grid.appendChild(b);
+  });
+}
+
+function toKmh(v) { return useMetric ? v : v / 0.621371; }
+function fromKmh(k) { return useMetric ? k : k * 0.621371; }
+
+function setSpeedPreset(v) { applyTarget(toKmh(v)); }
+
+function applyTarget(kmh) {
+  kmh = Math.min(MAX_KMH, Math.max(0, kmh));
+  targetKmh = kmh;
+  sendSpeed(kmh);
+  updateTargetUI();
+}
+
+// Nudge by 0.5 in whichever unit is on screen
+function nudgeSpeed(dir) {
+  var base = targetKmh !== null ? targetKmh : lastSk;
+  var step = useMetric ? 0.5 : 0.5 / 0.621371;
+  applyTarget(base + dir * step);
+}
+
+function updateTargetUI() {
+  var el = document.getElementById("target-val");
+  var shown = targetKmh === null ? null : fromKmh(targetKmh);
+  el.innerHTML = (shown === null ? "--" : shown.toFixed(1)) +
+                 ' <small>' + (useMetric ? "km/h" : "mph") + '</small>';
+  document.querySelectorAll(".speed-btn").forEach(function(b) {
+    b.classList.toggle("target", shown !== null && Math.abs(parseFloat(b.dataset.val) - shown) < 0.05);
+  });
+}
+
+// ── Capabilities: does the machine actually offer speed control? ──
+async function readCaps(svc) {
+  var lines = [];
+  try {
+    var c = await svc.getCharacteristic(FTMS_FEATURE);
+    var v = await c.readValue();
+    log("feature 0x2ACC: " + hex(new Uint8Array(v.buffer)));
+    // Octets 0-3 = machine features, 4-7 = target setting features
+    var tgt = v.getUint32(4, true);
+    var speedOK = !!(tgt & 0x0001);
+    var inclOK  = !!(tgt & 0x0002);
+    lines.push("set speed:   " + flag(speedOK));
+    lines.push("set incline: " + flag(inclOK));
+    log("   target flags 0x" + tgt.toString(16) + " — speed " + (speedOK ? "YES" : "NO"),
+        speedOK ? "ok" : "bad");
+  } catch(x) {
+    lines.push("feature read failed: " + (x.message || x));
+  }
+  try {
+    var r = await svc.getCharacteristic(SPEED_RANGE);
+    var rv = await r.readValue();
+    var lo = rv.getUint16(0, true) / 100, hi = rv.getUint16(2, true) / 100, inc = rv.getUint16(4, true) / 100;
+    lines.push("range: " + lo + "–" + hi + " km/h, step " + inc);
+    log("speed range 0x2AD4: " + lo + "–" + hi + " km/h step " + inc);
+  } catch(x) {
+    lines.push("no supported-speed-range characteristic");
+  }
+  document.getElementById("caps").innerHTML = lines.join("<br>");
+}
+
+function flag(b) {
+  return b ? '<span class="yes">supported</span>' : '<span class="no">NOT supported</span>';
+}
+
+// ── Debug log ──────────────────────────────────────────────────
+function hex(bytes) {
+  return Array.prototype.map.call(bytes, function(b) {
+    return b.toString(16).padStart(2, "0").toUpperCase();
+  }).join(" ");
+}
+
+function log(msg, cls) {
+  var el = document.getElementById("log");
+  var t = new Date().toTimeString().slice(0, 8);
+  var line = document.createElement("div");
+  if (cls) line.className = cls;
+  line.textContent = t + "  " + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearLog() { document.getElementById("log").innerHTML = ""; }
+
+// RSC cadence — no optionalServices declaration so Bluefy stays happy
+async function tryRSC(srv) {
+  try {
+    var rscSvc = await srv.getPrimaryService(RSC);
+    var rscCh = await rscSvc.getCharacteristic(RSC_MEAS);
+    await rscCh.startNotifications();
+    rscCh.addEventListener("characteristicvaluechanged", function(e) {
+      var cadence = e.target.value.getUint8(3) * 2;
+      document.getElementById("cadv").textContent = cadence + " spm";
+    });
+  } catch(x) {}
+}
+
+// FTMS Control Point (in the FTMS service)
+async function tryCP(svc) {
+  try {
+    cpChar = await svc.getCharacteristic(FTMS_CP);
+    await cpChar.startNotifications();
+    cpChar.addEventListener("characteristicvaluechanged", onCP);
+    log("control point ready");
+    requestControl();
+  } catch(x) {
+    cpChar = null;
+    log("no control point: " + (x.message || x), "bad");
+  }
+}
+
+function requestControl() {
+  writeCP(new Uint8Array([0x00]));
+}
+
+function onCP(e) {
+  var d = e.target.value;
+  log("← " + hex(new Uint8Array(d.buffer)));
+  if (d.byteLength < 3 || d.getUint8(0) !== 0x80) return;
+  var req = d.getUint8(1), res = d.getUint8(2);
+  var results = {0x01:"success", 0x02:"not supported", 0x03:"invalid param", 0x04:"failed", 0x05:"not permitted"};
+  var reqNames = {0x00:"request control", 0x02:"set speed", 0x03:"set incline", 0x07:"start", 0x08:"stop"};
+  var label = (reqNames[req] || "0x"+req.toString(16)) + " → " + (results[res] || "0x"+res.toString(16));
+  log("   " + label, res === 0x01 ? "ok" : "bad");
+  document.getElementById("ctrl-status").textContent = label;
+  document.getElementById("ctrl-status").style.color = res === 0x01 ? "var(--accent)" : "#ff5252";
+  if (req === 0x00 && res === 0x01) hasControl = true;
+}
+
+async function writeCP(buf) {
+  if (!cpChar) { log("write skipped — no control point", "bad"); return; }
+  log("→ " + hex(buf));
+  try {
+    if (cpChar.writeValueWithResponse) {
+      await cpChar.writeValueWithResponse(buf);
+    } else {
+      await cpChar.writeValue(buf);
+    }
+  } catch(x) {
+    log("   write failed: " + (x.message || x), "bad");
+  }
+}
+
+// Speed: opcode 0x02, uint16 LE, 0.01 km/h resolution
+async function sendSpeed(kmh) {
+  var val = Math.round(Math.max(0, kmh) * 100);
+  await writeCP(new Uint8Array([0x02, val & 0xFF, (val >> 8) & 0xFF]));
+}
+
+// Incline: opcode 0x03, int16 LE, 0.1% resolution
+async function sendIncline(pct) {
+  var val = Math.round(pct * 10);
+  if (val < 0) val += 65536;
+  await writeCP(new Uint8Array([0x03, val & 0xFF, (val >> 8) & 0xFF]));
+}
+
+function setGrade(pct) {
+  sendIncline(pct);
+}
+
+function startTreadmill() {
+  writeCP(new Uint8Array([0x07]));
+}
+
+function stopTreadmill() {
+  writeCP(new Uint8Array([0x08, 0x01]));
+  targetKmh = null;
+  updateTargetUI();
+}
+
+// Panel switching
+function showPanel(name) {
+  ["display", "speed", "control"].forEach(function(p) {
+    document.getElementById("panel-" + p).classList.toggle("hidden", p !== name);
+    document.getElementById("tab-" + p).classList.toggle("active", p === name);
+  });
+}
+
+// Disconnect handler
+function onDC() {
+  dt.classList.remove("on");
+  ft.classList.add("hidden");
+  tabs.classList.add("hidden");
+  cpChar = null; hasControl = false;
+  document.getElementById("ctrl-status").textContent = "waiting…";
+  document.getElementById("ctrl-status").style.color = "var(--dim)";
+  calAccum = 0; lastDataTime = 0;
+  lastSk = 0; lastDk = null; lastInc = null; sessionStartDk = null;
+  lastMileMarker = 0; lastMileMarkerTime = null; lastMilePaceStr = "--:--";
+  lastKmMarker = 0; lastKmMarkerTime = null; lastKmPaceStr = "--:--";
+  targetKmh = null;
+  updateTargetUI();
+  log("disconnected", "bad");
+  if (ti) clearInterval(ti);
+  document.getElementById("sv").textContent = "0.0";
+  document.getElementById("sv").classList.add("idle");
+  document.getElementById("pv").textContent = "--:--";
+  document.getElementById("dval").textContent = "0.00";
+  document.getElementById("gv").textContent = "0%";
+  document.getElementById("cadv").textContent = "-- spm";
+  document.getElementById("calv").textContent = "0";
+  document.getElementById("tmv").textContent = "00:00";
+  document.getElementById("lpv").textContent = "--:--";
+  showPanel("display");
+  setTimeout(function() {
+    ov.classList.remove("hidden");
+    cb.textContent = "Reconnect";
+    cb.disabled = false;
+  }, 1500);
+}
+
+function doDisconnect() {
+  if (dev && dev.gatt.connected) dev.gatt.disconnect();
+}
+
+// Elapsed timer
+function uT() {
+  if (!st) return;
+  var e = Math.floor((Date.now() - st) / 1000);
+  var m = Math.floor(e / 60), s = e % 60;
+  var t = String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+  document.getElementById("tm").textContent = t;
+  document.getElementById("tmv").textContent = t;
+}
+
+// Theme toggle
+function applyTheme(theme) {
+  document.body.classList.toggle("light", theme === "light");
+  var label = theme === "light" ? "Dark" : "Light";
+  ["theme-btn", "theme-btn-ov"].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = label;
+  });
+}
+function toggleTheme() {
+  var next = document.body.classList.contains("light") ? "dark" : "light";
+  localStorage.setItem("theme", next);
+  applyTheme(next);
+}
+
+// Weight buttons
+document.getElementById("weight-val").textContent = userWeightKg + " kg";
+document.getElementById("ver").textContent = "v" + VERSION;
+function adjustWeight(delta) {
+  var v = Math.min(250, Math.max(30, userWeightKg + delta));
+  userWeightKg = v;
+  localStorage.setItem("weightKg", v);
+  document.getElementById("weight-val").textContent = v + " kg";
+}
+
+// Desktop popup launcher
+function launchPopup(pw, ph) {
+  var left = window.screen.width - pw - 20;
+  var top = Math.round((window.screen.height - ph) / 2);
+  var features = "width=" + pw + ",height=" + ph + ",left=" + left + ",top=" + top + ",resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no";
+  var popup = window.open(location.href, "kickr_speed_test", features);
+  if (!popup) alert("Popup blocked - please allow popups for this site.");
+}
+
+buildSpeedGrid();
+updateTargetUI();
+</script>
+</body>
+</html>
