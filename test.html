@@ -497,6 +497,15 @@ async function readCaps(svc) {
   } catch(x) {
     lines.push("no supported-speed-range characteristic");
   }
+  try {
+    var ir = await svc.getCharacteristic(INCL_RANGE);
+    var iv = await ir.readValue();
+    var ilo = iv.getInt16(0, true) / 10, ihi = iv.getInt16(2, true) / 10, iinc = iv.getUint16(4, true) / 10;
+    lines.push("incline: " + ilo + "–" + ihi + "%, step " + iinc);
+    log("incline range 0x2AD5: " + ilo + "–" + ihi + "% step " + iinc);
+  } catch(x) {
+    lines.push("no supported-inclination-range characteristic");
+  }
   document.getElementById("caps").innerHTML = lines.join("<br>");
 }
 
