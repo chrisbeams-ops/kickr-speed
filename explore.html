@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KICKR Run GATT Explorer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#0d0d10;color:#e4e4e8;padding:20px;line-height:1.5;font-size:13px}
+  h1{font-size:15px;letter-spacing:1px;text-transform:uppercase;color:#00e676;margin-bottom:4px}
+  .sub{color:#6a6a76;font-size:11px;margin-bottom:16px}
+  .warn{background:rgba(255,82,82,0.1);border:1px solid #ff5252;color:#ff8a80;padding:10px 12px;border-radius:6px;font-size:11px;margin-bottom:16px}
+  button{font-family:inherit;font-size:12px;font-weight:600;color:#0d0d10;background:#00e676;border:none;padding:10px 18px;border-radius:6px;cursor:pointer;margin-right:8px}
+  button.alt{background:#26262e;color:#e4e4e8}
+  button:disabled{opacity:0.4;cursor:default}
+  #out{margin-top:16px;white-space:pre-wrap;word-break:break-all;font-size:11px;line-height:1.6;user-select:text}
+  .svc{color:#00e676;font-weight:700;margin-top:14px;display:block}
+  .chr{color:#e4e4e8;display:block;margin-left:14px}
+  .props{color:#6a6a76}
+  .val{color:#ffb74d}
+  .notif{color:#42a5f5}
+  .err{color:#ff5252}
+  .dim{color:#6a6a76}
+  textarea{width:100%;height:160px;margin-top:12px;background:#16161a;color:#e4e4e8;border:1px solid #26262e;border-radius:6px;padding:10px;font-family:inherit;font-size:10px;display:none}
+</style>
+</head>
+<body>
+
+<h1>KICKR Run GATT Explorer</h1>
+<div class="sub">Read-only. Enumerates services, reads readable characteristics, subscribes to notifications. Never writes.</div>
+
+<div class="warn">
+  Nordic DFU (<code>fe59</code>) is deliberately excluded — writing to it can brick the treadmill.
+  This page has no write path at all.
+</div>
+
+<button id="go">Connect &amp; dump</button>
+<button id="copy" class="alt" disabled>Copy dump</button>
+<button id="stop" class="alt" disabled>Disconnect</button>
+<textarea id="ta"></textarea>
+
+<div id="out"></div>
+
+<script>
+// Wahoo's proprietary UUID base, plus the standard services we already know.
+var WAHOO_BASE = "-0a7d-4ab3-97fa-f1500f9feb8b";
+var WAHOO = ["a026ee01", "a026ee06", "a026ee0e",
+             // near neighbours, in case this unit exposes more than it advertises
+             "a026ee02", "a026ee03", "a026ee04", "a026ee05", "a026ee07",
+             "a026ee08", "a026ee09", "a026ee0a", "a026ee0b", "a026ee0c",
+             "a026ee0d", "a026ee0f"].map(function(s) { return s + WAHOO_BASE; });
+
+var STANDARD = [0x1800, 0x1801, 0x180a, 0x180f, 0x1814, 0x1826];
+var ALL = STANDARD.concat(WAHOO);
+
+var dev = null;
+var out = document.getElementById("out");
+var lines = [];
+
+function put(text, cls) {
+  var el = document.createElement("span");
+  el.className = cls || "";
+  el.textContent = text + "\n";
+  out.appendChild(el);
+  lines.push(text);
+}
+
+function hex(dv) {
+  var b = new Uint8Array(dv.buffer || dv);
+  return Array.prototype.map.call(b, function(x) {
+    return x.toString(16).padStart(2, "0").toUpperCase();
+  }).join(" ");
+}
+
+function ascii(dv) {
+  var b = new Uint8Array(dv.buffer || dv), s = "";
+  for (var i = 0; i < b.length; i++) s += (b[i] >= 32 && b[i] < 127) ? String.fromCharCode(b[i]) : ".";
+  return s;
+}
+
+function props(c) {
+  var p = c.properties, list = [];
+  ["read","write","writeWithoutResponse","notify","indicate","authenticatedSignedWrites"].forEach(function(k) {
+    if (p[k]) list.push(k);
+  });
+  return list.join(",") || "none";
+}
+
+function shortUuid(u) {
+  var m = /^0000([0-9a-f]{4})-0000-1000-8000-00805f9b34fb$/.exec(u);
+  return m ? "0x" + m[1].toUpperCase() : u;
+}
+
+document.getElementById("go").addEventListener("click", async function() {
+  out.innerHTML = ""; lines = [];
+  try {
+    dev = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [0x1826] }],
+      optionalServices: ALL
+    });
+    put("device: " + dev.name + "  (" + dev.id + ")");
+    dev.addEventListener("gattserverdisconnected", function() { put("-- disconnected --", "err"); });
+    var srv = await dev.gatt.connect();
+    put("connected, enumerating…", "dim");
+
+    var services = await srv.getPrimaryServices();
+    put("visible services: " + services.length, "dim");
+
+    for (var i = 0; i < services.length; i++) {
+      var s = services[i];
+      put("\nSERVICE " + shortUuid(s.uuid), "svc");
+      var chars = [];
+      try {
+        chars = await s.getCharacteristics();
+      } catch (e) {
+        put("  (characteristics unavailable: " + e.message + ")", "err");
+        continue;
+      }
+      for (var j = 0; j < chars.length; j++) {
+        var c = chars[j];
+        put("  " + shortUuid(c.uuid) + "   [" + props(c) + "]", "chr");
+
+        if (c.properties.read) {
+          try {
+            var v = await c.readValue();
+            put("      read: " + hex(v) + "   \"" + ascii(v) + "\"", "val");
+          } catch (e) {
+            put("      read failed: " + e.message, "err");
+          }
+        }
+        if (c.properties.notify || c.properties.indicate) {
+          try {
+            await c.startNotifications();
+            c.addEventListener("characteristicvaluechanged", makeLogger(c.uuid));
+            put("      subscribed — notifications will appear below", "dim");
+          } catch (e) {
+            put("      subscribe failed: " + e.message, "err");
+          }
+        }
+      }
+    }
+
+    put("\nDump complete. Now use the treadmill console — change speed, change incline —");
+    put("and any proprietary telemetry will stream in below.", "dim");
+    document.getElementById("copy").disabled = false;
+    document.getElementById("stop").disabled = false;
+
+  } catch (e) {
+    put("ERROR: " + (e.message || e), "err");
+  }
+});
+
+function makeLogger(uuid) {
+  return function(e) {
+    var t = new Date().toTimeString().slice(0, 8);
+    put(t + "  NOTIFY " + shortUuid(uuid) + "  " + hex(e.target.value), "notif");
+  };
+}
+
+document.getElementById("copy").addEventListener("click", function() {
+  var ta = document.getElementById("ta");
+  ta.style.display = "block";
+  ta.value = lines.join("\n");
+  ta.select();
+  try { document.execCommand("copy"); } catch (x) {}
+});
+
+document.getElementById("stop").addEventListener("click", function() {
+  if (dev && dev.gatt.connected) dev.gatt.disconnect();
+});
+</script>
+</body>
+</html>
