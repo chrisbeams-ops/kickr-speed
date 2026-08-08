@@ -146,12 +146,23 @@ with the origin byte set:
 17:27:31  a026e03e  FD 02 00 00 01
 ```
 
-**This is the detector for the speed capture.** When the Wahoo app sets a pace
-target, `a026e03e` should emit `FD <speed field id> <value> 01`, with `0x2ADA`
-emitting `05` (Target Speed Changed) alongside in known FTMS units. That yields
-the speed encoding even without seeing the command itself. The command will be
-on one of `a026e002`, `a026e018`, `a026e023` — silent through every operation
-so far.
+**The mirror does not cover speed.** Tested 2026-08-08 during a real Wahoo app
+pace workout, where the belt changed speed and the paddle prompt appeared:
+
+- `0x2ADA` was subscribed and emitted **nothing**. This machine does not report
+  Target Speed Changed (`0x05`) even though it reports Target Incline Changed
+  (`0x06`) — consistent with speed targets being absent from its FTMS
+  implementation entirely.
+- `a026e03e` was subscribed, confirmed with `1 subscribed`, and emitted
+  **nothing** across the whole workout.
+
+So a pace target set by the Wahoo app is invisible from outside: neither the
+command nor any announcement of it can be observed. The command is presumably
+on one of `a026e002`, `a026e018`, `a026e023`, all silent throughout.
+
+The remaining route is a Bluetooth HCI trace of the phone while the Wahoo app
+runs a pace workout — the DIRCON proxy cannot help, since the app does not use
+DIRCON.
 
 Useful correlation trick for a future capture: FTMS Machine Status (`0x2ADA`)
 opcode `0x05` is *Target Speed Changed*. When an app sets a pace, `0x2ADA`
