@@ -55,13 +55,33 @@ CLIENT_ID = os.environ.get("WAHOO_CLIENT_ID")
 CLIENT_SECRET = os.environ.get("WAHOO_CLIENT_SECRET")
 
 def post_form(url, fields):
-    data = urllib.parse.urlencode(fields).encode()
-    req = urllib.request.Request(url, data=data, method="POST")
-    try:
-        with urllib.request.urlopen(req) as r:
-            return json.loads(r.read())
-    except urllib.error.HTTPError as e:
-        sys.exit(f"{url} failed: {e.code}\n{e.read().decode()}")
+    """Try credentials in the body first, then as HTTP Basic auth.
+
+    Some OAuth servers only accept one or the other, and the invalid_client
+    error does not distinguish between "wrong secret" and "wrong place".
+    """
+    attempts = [
+        ("body", fields, None),
+        ("basic", {k: v for k, v in fields.items()
+                   if k not in ("client_id", "client_secret")},
+         base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode()).decode()),
+    ]
+    last = None
+    for how, body, basic in attempts:
+        data = urllib.parse.urlencode(body).encode()
+        req = urllib.request.Request(url, data=data, method="POST")
+        req.add_header("Content-Type", "application/x-www-form-urlencoded")
+        if basic:
+            req.add_header("Authorization", f"Basic {basic}")
+        try:
+            with urllib.request.urlopen(req) as r:
+                if how == "basic":
+                    print("  (credentials accepted as HTTP Basic auth)")
+                return json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            last = f"{e.code}\n{e.read().decode()}"
+            print(f"  client auth via {how} failed: {e.code}")
+    sys.exit(f"{url} failed both ways.\n{last}")
 
 
 def api_post(path, fields, token):
@@ -165,6 +185,10 @@ def main():
 
     if not CLIENT_ID or not CLIENT_SECRET:
         sys.exit("Set WAHOO_CLIENT_ID and WAHOO_CLIENT_SECRET first (see docstring).")
+    # Values are never printed — only their shape, which is enough to spot an
+    # empty or truncated variable without exposing the secret.
+    print(f"client id: {len(CLIENT_ID)} chars, secret: {len(CLIENT_SECRET)} chars")
+    print(f"redirect:  {REDIRECT}")
 
     token = authorise()
 
