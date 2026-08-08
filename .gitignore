@@ -20,3 +20,6 @@ captures/
 *.pcap
 *.pcapng
 *.btsnoop
+
+# Wahoo OAuth token cache — never commit
+.wahoo_token.json
