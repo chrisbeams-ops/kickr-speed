@@ -29,6 +29,7 @@ never written to disk by this script.
 
 import argparse
 import base64
+import getpass
 import json
 import os
 import sys
@@ -183,12 +184,21 @@ def main():
     if args.dry_run:
         return
 
+    # Environment variables are the fiddly bit — quoting, the wrong window, a
+    # stale value after rotating. Just ask if they are not already set.
+    global CLIENT_ID, CLIENT_SECRET
+    if not CLIENT_ID:
+        CLIENT_ID = input("Client ID (from the Wahoo developer portal): ").strip()
+    if not CLIENT_SECRET:
+        CLIENT_SECRET = getpass.getpass("Client secret (not shown as you type/paste): ").strip()
     if not CLIENT_ID or not CLIENT_SECRET:
-        sys.exit("Set WAHOO_CLIENT_ID and WAHOO_CLIENT_SECRET first (see docstring).")
+        sys.exit("need both a client id and secret")
+
     # Values are never printed — only their shape, which is enough to spot an
-    # empty or truncated variable without exposing the secret.
-    print(f"client id: {len(CLIENT_ID)} chars, secret: {len(CLIENT_SECRET)} chars")
-    print(f"redirect:  {REDIRECT}")
+    # empty or truncated credential without exposing the secret.
+    print(f"\nclient id: {len(CLIENT_ID)} chars ending {CLIENT_ID[-4:]}")
+    print(f"secret:    {len(CLIENT_SECRET)} chars ending {CLIENT_SECRET[-4:]}")
+    print(f"redirect:  {REDIRECT}\n")
 
     token = authorise()
 
