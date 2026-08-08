@@ -160,9 +160,20 @@ So a pace target set by the Wahoo app is invisible from outside: neither the
 command nor any announcement of it can be observed. The command is presumably
 on one of `a026e002`, `a026e018`, `a026e023`, all silent throughout.
 
-The remaining route is a Bluetooth HCI trace of the phone while the Wahoo app
-runs a pace workout — the DIRCON proxy cannot help, since the app does not use
-DIRCON.
+`a026e002`, `a026e004`, `a026e018` and `a026e023` were also subscribed and
+confirmed during several app-driven pace changes, and stayed silent too.
+
+**Why observing from outside cannot work.** Notifications are per-subscriber,
+and a request/response exchange is directed to the client that made it. From a
+second connection we see broadcast state — `0x2ACD`, `0x2A53`, `a026e03d`
+telemetry, and `a026e03e` incline targets, including changes originated by
+another client — but never another client's command traffic or its
+acknowledgement. That is how BLE works, not a subscription problem, so no amount
+of retrying from DIRCON will surface it.
+
+The only vantage point that sees the phone's own traffic is the phone's own
+Bluetooth stack: an HCI trace (profile + sysdiagnose, or PacketLogger). The
+DIRCON proxy cannot help either, since the Wahoo app does not use DIRCON.
 
 Useful correlation trick for a future capture: FTMS Machine Status (`0x2ADA`)
 opcode `0x05` is *Target Speed Changed*. When an app sets a pace, `0x2ADA`
