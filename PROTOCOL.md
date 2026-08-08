@@ -119,6 +119,46 @@ the Wahoo app driving the machine (Android HCI snoop log, or PacketLogger on
 iOS) during a planned workout with pace targets, then match writes to observed
 behaviour.
 
+## DIRCON — the same GATT tree over TCP
+
+**The KICKR RUN supports Wahoo Direct Connect (WFTNP).** Confirmed 2026-08-08.
+This matters: DIRCON is "BLE over TCP/IP", so every service and characteristic
+below is reachable from a laptop on the same network, with no phone and no
+Bluetooth stack involved.
+
+mDNS advertisement (`_wahoo-fitness-tnp._tcp.local`):
+
+```
+KICKR RUN 6D7C._wahoo-fitness-tnp._tcp.local  ->  KICKR-RUN-6D7C.local:36866
+  ble-service-uuids = 0x1826,0x1814,A026EE0E-0A7D-4AB3-97FA-F1500F9FEB8B
+  mac-address       = D8-3B-DA-05-EB-E4
+  serial-number     = 252800028
+```
+
+Note the TXT record advertises a **proprietary service** alongside the standard
+ones. Discover Services over TCP then returns all six, exactly matching the
+Bluetooth dump — including all five write-capable proprietary characteristics:
+
+| Service | Characteristics |
+|---|---|
+| `0x180A` | `0x2A29` `0x2A25` `0x2A27` `0x2A26` (read) |
+| `0x1826` | `0x2ACC` `0x2AD5` (read), `0x2AD9` (write,notify), `0x2ACD` `0x2ADA` (notify) |
+| `0x1814` | `0x2A54` (read), `0x2A53` (notify) |
+| `a026ee01` | `a026e002` `a026e03b` (write,notify), `a026e004` (notify) |
+| `a026ee06` | `a026e023` `a026e018` (write,notify) |
+| `a026ee0e` | `a026e03e` (write,notify), `a026e03d` `a026e040` (notify) |
+
+Device Information over DIRCON confirms firmware `2.0.43`, hardware rev `7`,
+serial `252800028`, manufacturer `Wahoo Fitness`.
+
+Practical notes:
+- Connect by IP, not the `.local` name — name resolution gave "no route to host"
+  while the A record resolved fine and the host pinged.
+- Round-trip latency is 400–900 ms (Wi-Fi power saving), and the device drops
+  the connection if subscriptions are fired back to back. Space them out.
+
+`scripts/dircon_explore.py` implements the read-only side of this.
+
 ## Prior art — none
 
 Checked 2026-08-01:

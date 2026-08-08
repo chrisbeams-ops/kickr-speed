@@ -192,6 +192,11 @@ def main():
     ap.add_argument("--discover", action="store_true")
     ap.add_argument("--listen", type=int, default=60,
                     help="seconds to log notifications (default 60)")
+    ap.add_argument("--only", help="comma-separated substrings of characteristics "
+                                   "to subscribe to, e.g. e03d,2acd")
+    ap.add_argument("--gap", type=float, default=0.3,
+                    help="seconds between subscribe requests (default 0.3)")
+    ap.add_argument("--no-read", action="store_true", help="skip reading characteristics")
     args = ap.parse_args()
 
     host, port = args.host, args.port
@@ -233,7 +238,7 @@ def main():
             cu, props = rec[:16], rec[16]
             print(f"  {uuid_label(cu):<28} [{props_label(props)}]")
 
-            if props & PROP_READ:
+            if props & PROP_READ and not args.no_read:
                 seq += 1
                 r, d = txn(sock, MSG_READ_CHAR, seq, cu)
                 if r == 0 and len(d) > 16:
@@ -246,12 +251,27 @@ def main():
             if props & PROP_NOTIFY:
                 notify_chars.append(cu)
 
+    if args.only:
+        want = [w.lower() for w in args.only.split(",")]
+        notify_chars = [c for c in notify_chars
+                        if any(w in uuid_label(c).lower() or w in c.hex() for w in want)]
+
     print(f"\n=== subscribing to {len(notify_chars)} characteristics ===")
+    subscribed = 0
     for cu in notify_chars:
         seq += 1
-        r, _ = txn(sock, MSG_ENABLE_NOTIFY, seq, cu + b"\x01")
-        if r != 0:
-            print(f"  {uuid_label(cu)}: {RESP.get(r, r)}")
+        try:
+            r, _ = txn(sock, MSG_ENABLE_NOTIFY, seq, cu + b"\x01")
+            if r == 0:
+                subscribed += 1
+            else:
+                print(f"  {uuid_label(cu)}: {RESP.get(r, r)}")
+        except (ConnectionError, OSError) as e:
+            # The device drops the link if subscriptions are fired too fast
+            print(f"  {uuid_label(cu)}: connection lost during subscribe ({e})")
+            break
+        time.sleep(args.gap)
+    print(f"  {subscribed} subscribed")
 
     print(f"\n=== listening {args.listen}s — use the console now ===")
     sock.settimeout(1.0)
