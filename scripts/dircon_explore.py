@@ -72,11 +72,19 @@ def recv_msg(sock):
     return mtype, seq, resp, recv_exact(sock, dlen) if dlen else b""
 
 
-def txn(sock, msg_type, seq, data=b""):
+def txn(sock, msg_type, seq, data=b"", deadline=8.0):
     """Send a request and return its matching response, logging notifications
-    that arrive in between."""
+    that arrive in between.
+
+    The deadline matters: a026e03d notifies continuously, so a plain blocking
+    read never times out even when the response is never coming — it just keeps
+    consuming notifications forever.
+    """
     sock.sendall(pack(msg_type, seq, data))
+    end = time.time() + deadline
     while True:
+        if time.time() > end:
+            raise TimeoutError(f"no response to msg type {msg_type} seq {seq}")
         mtype, rseq, resp, payload = recv_msg(sock)
         if mtype == MSG_NOTIFICATION:
             log_notification(payload)
@@ -197,6 +205,7 @@ def main():
     ap.add_argument("--gap", type=float, default=0.3,
                     help="seconds between subscribe requests (default 0.3)")
     ap.add_argument("--no-read", action="store_true", help="skip reading characteristics")
+    ap.add_argument("--skip", help="comma-separated substrings to NOT subscribe to")
     args = ap.parse_args()
 
     host, port = args.host, args.port
@@ -255,6 +264,15 @@ def main():
         want = [w.lower() for w in args.only.split(",")]
         notify_chars = [c for c in notify_chars
                         if any(w in uuid_label(c).lower() or w in c.hex() for w in want)]
+    if args.skip:
+        drop = [w.lower() for w in args.skip.split(",")]
+        notify_chars = [c for c in notify_chars
+                        if not any(w in uuid_label(c).lower() or w in c.hex() for w in drop)]
+
+    # Telemetry first: a bad subscribe can drop the link, and losing the
+    # known-good channels would waste the whole run.
+    priority = ("00002acd", "00002a53", "a026e03d", "a026e040")
+    notify_chars.sort(key=lambda c: 0 if c.hex().startswith(priority) else 1)
 
     print(f"\n=== subscribing to {len(notify_chars)} characteristics ===")
     subscribed = 0
@@ -266,6 +284,9 @@ def main():
                 subscribed += 1
             else:
                 print(f"  {uuid_label(cu)}: {RESP.get(r, r)}")
+        except TimeoutError as e:
+            # No response, but the link is still alive — keep going
+            print(f"  {uuid_label(cu)}: no response ({e})")
         except (ConnectionError, OSError) as e:
             # The device drops the link if subscriptions are fired too fast
             print(f"  {uuid_label(cu)}: connection lost during subscribe ({e})")

@@ -91,6 +91,60 @@ Speed and distance agree with FTMS to within rounding.
 The speed decode was checked against FTMS across six samples: the ratio
 `u32 ÷ (m/s)` was 1,000,000 within 0.17% every time.
 
+### `a026e03e` (service `a026ee0e`) — target setting
+
+**This is a target-setting channel**, and the first proprietary command format
+decoded. Observed 2026-08-08 when the incline was changed from the console:
+
+```
+17:15:50  0x2ADA    06 05 00           FTMS machine status: target incline changed, 5 (0.1%)  = 0.5%
+17:15:50  a026e03e  FD 02 32 00 00     0x32 = 50 (0.01%)                                      = 0.5%
+17:15:50  0x2ACD    …00 05 00…         actual inclination now 0.5%
+
+17:15:53  0x2ADA    06 00 00           target incline changed → 0
+17:15:53  a026e03e  FD 02 00 00 00     value 0
+17:15:53  0x2ACD    …00 00 00…         actual inclination back to 0
+```
+
+Inferred layout:
+
+| Offset | Bytes | Meaning | Confidence |
+|---|---|---|---|
+| 0 | `FD` | message header | medium |
+| 1 | `02` | field id — `02` = inclination target | medium |
+| 2–3 | int16 LE | target value, 0.01% units for inclination | **high** — cross-checks against FTMS twice |
+| 4 | `00` | unknown; possibly a high byte or flag | low |
+
+The obvious hypothesis is that a **speed** target is the same channel with a
+different field id. Untested, and the field id for speed is unknown.
+
+**Writing this payload back does not work.** Tested 2026-08-08 with the belt
+running at 2.41 km/h and telemetry confirming the machine was awake:
+
+```
+>>> WRITE a026e03e  FD 02 32 00 00     (the exact bytes the machine emitted)
+    a026e03e  FE FD 02                 (machine responds)
+>>> DIRCON response: success
+    incline stays +0.0% for 10s        (nothing happens)
+```
+
+So the write reaches the machine and is answered, but has no effect. Likely
+`FE` is a rejection echoing the opcode, or the channel requires a session or
+control grant first — `a026e002`, `a026e018` and `a026e023` are the candidates,
+having stayed silent through every console operation. Do not assume the notify
+format is the write format.
+
+Useful correlation trick for a future capture: FTMS Machine Status (`0x2ADA`)
+opcode `0x05` is *Target Speed Changed*. When an app sets a pace, `0x2ADA`
+should emit `05 …` at the same instant `a026e03e` emits its proprietary
+equivalent — which pairs the two and gives the speed encoding directly.
+
+Note `a026e03e` is silent except when a target actually changes. The other
+write characteristics (`a026e002`, `a026e023`, `a026e018`) stayed silent
+throughout a full session of speed changes, incline changes and start/stop.
+`a026e03b` cannot be subscribed to over DIRCON — the request times out and
+kills the connection.
+
 ### `a026e040` (service `a026ee0e`)
 
 11 bytes, `7F 00 00 00 00 00 00 00 00 XX YY`. Bytes 9 and 10 change
