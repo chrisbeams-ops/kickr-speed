@@ -93,8 +93,12 @@ The speed decode was checked against FTMS across six samples: the ratio
 
 ### `a026e03e` (service `a026ee0e`) — target setting
 
-**This is a target-setting channel**, and the first proprietary command format
-decoded. Observed 2026-08-08 when the incline was changed from the console:
+**This is a status mirror, not a command channel.** It reports every target
+change with its origin, whatever set it. Incline itself is commanded over FTMS
+(`0x2AD9` opcode `0x03`) — which is how Zwift and this app already control it —
+so what appears here is the announcement, not the instruction.
+
+Observed 2026-08-08, incline changed from the console:
 
 ```
 17:15:50  0x2ADA    06 05 00           FTMS machine status: target incline changed, 5 (0.1%)  = 0.5%
@@ -113,7 +117,7 @@ Inferred layout:
 | 0 | `FD` | message header | medium |
 | 1 | `02` | field id — `02` = inclination target | medium |
 | 2–3 | int16 LE | target value, 0.01% units for inclination | **high** — cross-checks against FTMS twice |
-| 4 | `00` | unknown; possibly a high byte or flag | low |
+| 4 | byte | **origin of the change** — `00` console/local, `01` app/remote | **high** — two clean observations of each |
 
 The obvious hypothesis is that a **speed** target is the same channel with a
 different field id. Untested, and the field id for speed is unknown.
@@ -128,11 +132,26 @@ running at 2.41 km/h and telemetry confirming the machine was awake:
     incline stays +0.0% for 10s        (nothing happens)
 ```
 
-So the write reaches the machine and is answered, but has no effect. Likely
-`FE` is a rejection echoing the opcode, or the channel requires a session or
-control grant first — `a026e002`, `a026e018` and `a026e023` are the candidates,
-having stayed silent through every console operation. Do not assume the notify
-format is the write format.
+So the write reaches the machine and is answered, but has no effect — as
+expected for a reporting channel. `FE FD 02` is most likely a rejection echoing
+the opcode and field.
+
+Changing incline **from the app over FTMS** produces the same mirror message
+with the origin byte set:
+
+```
+17:27:24  0x2ADA    06 14 00        target incline -> 20 (0.1%) = 2.0%
+17:27:24  a026e03e  FD 02 C8 00 01  200 (0.01%) = 2.0%, origin 01 = app
+17:27:31  0x2ADA    06 00 00
+17:27:31  a026e03e  FD 02 00 00 01
+```
+
+**This is the detector for the speed capture.** When the Wahoo app sets a pace
+target, `a026e03e` should emit `FD <speed field id> <value> 01`, with `0x2ADA`
+emitting `05` (Target Speed Changed) alongside in known FTMS units. That yields
+the speed encoding even without seeing the command itself. The command will be
+on one of `a026e002`, `a026e018`, `a026e023` — silent through every operation
+so far.
 
 Useful correlation trick for a future capture: FTMS Machine Status (`0x2ADA`)
 opcode `0x05` is *Target Speed Changed*. When an app sets a pace, `0x2ADA`
