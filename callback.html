@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wahoo OAuth callback</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#0d0d10;color:#e4e4e8;
+       min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{max-width:640px;width:100%}
+  h1{font-size:14px;letter-spacing:2px;text-transform:uppercase;color:#00e676;margin-bottom:6px}
+  p{font-size:12px;color:#6a6a76;line-height:1.6;margin-bottom:18px}
+  .code{background:#16161a;border:1px solid #26262e;border-radius:8px;padding:16px;
+        font-size:13px;word-break:break-all;user-select:all;line-height:1.6}
+  .err{border-color:#ff5252;color:#ff8a80}
+  button{margin-top:14px;font-family:inherit;font-size:12px;font-weight:600;color:#0d0d10;
+         background:#00e676;border:none;padding:10px 18px;border-radius:6px;cursor:pointer}
+  .hint{margin-top:18px;font-size:11px;color:#4a4a56;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1 id="title">Authorisation code</h1>
+  <p id="sub">Copy this and paste it back into the terminal.</p>
+  <div class="code" id="code">…</div>
+  <button id="copy">Copy</button>
+  <div class="hint">
+    This page only reads the code out of the URL so you can copy it.
+    Nothing is sent anywhere, and nothing is stored.
+  </div>
+</div>
+<script>
+  var params = new URLSearchParams(location.search);
+  var code = params.get("code");
+  var error = params.get("error");
+  var el = document.getElementById("code");
+
+  if (code) {
+    el.textContent = code;
+  } else if (error) {
+    document.getElementById("title").textContent = "Authorisation failed";
+    document.getElementById("sub").textContent = params.get("error_description") || "";
+    el.textContent = error;
+    el.className = "code err";
+  } else {
+    document.getElementById("title").textContent = "Nothing to show";
+    document.getElementById("sub").textContent =
+      "Open this page via the Wahoo authorisation flow.";
+    el.textContent = location.search || "(no query string)";
+    el.className = "code err";
+  }
+
+  document.getElementById("copy").addEventListener("click", function () {
+    navigator.clipboard.writeText(el.textContent).then(function () {
+      var b = document.getElementById("copy");
+      b.textContent = "Copied";
+      setTimeout(function () { b.textContent = "Copy"; }, 1500);
+    });
+  });
+</script>
+</body>
+</html>

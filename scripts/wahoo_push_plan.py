@@ -9,7 +9,8 @@ reasonable way to build interval sessions in its own right.
 
 Setup (once):
   1. Create an app at https://developers.wahooligan.com/applications
-     Redirect URI:  http://localhost:8080/callback
+     Redirect URI:  https://chrisbeams-ops.github.io/kickr-speed/callback.html
+                    (must be https — Wahoo rejects http)
      Scopes:        user_read workouts_read workouts_write plans_read plans_write
   2. export WAHOO_CLIENT_ID=...
      export WAHOO_CLIENT_SECRET=...
@@ -28,11 +29,9 @@ never written to disk by this script.
 
 import argparse
 import base64
-import http.server
 import json
 import os
 import sys
-import threading
 import time
 import urllib.parse
 import urllib.request
@@ -44,32 +43,16 @@ AUTH = "https://api.wahooligan.com/oauth/authorize"
 TOKEN = "https://api.wahooligan.com/oauth/token"
 API = "https://api.wahooligan.com/v1"
 SCOPES = "user_read workouts_read workouts_write plans_read plans_write"
-REDIRECT = "http://localhost:8080/callback"
+# Wahoo requires an https redirect URI, so localhost is out. The GitHub Pages
+# site already serves HTTPS, and callback.html there just displays the code for
+# copy-paste — it sends the code nowhere and stores nothing.
+REDIRECT = os.environ.get(
+    "WAHOO_REDIRECT_URI",
+    "https://chrisbeams-ops.github.io/kickr-speed/callback.html")
 TOKEN_FILE = Path(".wahoo_token.json")
 
 CLIENT_ID = os.environ.get("WAHOO_CLIENT_ID")
 CLIENT_SECRET = os.environ.get("WAHOO_CLIENT_SECRET")
-
-_code = {}
-
-
-class Handler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        q = urllib.parse.urlparse(self.path).query
-        params = urllib.parse.parse_qs(q)
-        if "code" in params:
-            _code["code"] = params["code"][0]
-            body = b"<h2>Authorised.</h2><p>You can close this tab.</p>"
-        else:
-            body = b"<h2>No code received.</h2><pre>" + q.encode() + b"</pre>"
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html")
-        self.end_headers()
-        self.wfile.write(body)
-
-    def log_message(self, *a):
-        pass
-
 
 def post_form(url, fields):
     data = urllib.parse.urlencode(fields).encode()
@@ -107,9 +90,6 @@ def authorise():
             })
             return save_token(t)
 
-    srv = http.server.HTTPServer(("localhost", 8080), Handler)
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
-
     url = f"{AUTH}?" + urllib.parse.urlencode({
         "client_id": CLIENT_ID, "redirect_uri": REDIRECT,
         "scope": SCOPES, "response_type": "code",
@@ -118,17 +98,13 @@ def authorise():
     print(f"If it does not open, visit:\n{url}\n")
     webbrowser.open(url)
 
-    for _ in range(300):
-        if "code" in _code:
-            break
-        time.sleep(1)
-    srv.shutdown()
-    if "code" not in _code:
-        sys.exit("timed out waiting for authorisation")
+    code = input("Paste the authorisation code from the callback page: ").strip()
+    if not code:
+        sys.exit("no code given")
 
     t = post_form(TOKEN, {
         "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET,
-        "code": _code["code"], "grant_type": "authorization_code",
+        "code": code, "grant_type": "authorization_code",
         "redirect_uri": REDIRECT,
     })
     return save_token(t)
