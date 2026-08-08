@@ -96,6 +96,25 @@
   .delta.up{color:#ff9800}
   .delta.down{color:#42a5f5}
 
+  /* ── Workout ── */
+  .wo-rows{display:flex;flex-direction:column;gap:6px;width:100%;max-width:300px}
+  .wo-row{display:flex;gap:6px;align-items:center}
+  .wo-row input{font-family:"JetBrains Mono",monospace;font-size:15px;font-weight:700;
+    color:var(--text);background:var(--border);border:none;border-radius:8px;padding:10px 8px;
+    width:100%;text-align:center;-webkit-appearance:none}
+  .wo-row .unit{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+    color:var(--dim);min-width:34px}
+  .wo-del{font-family:"JetBrains Mono",monospace;font-size:16px;font-weight:700;color:var(--dim);
+    background:none;border:none;cursor:pointer;padding:0 6px;-webkit-tap-highlight-color:transparent}
+  .wo-del:hover{color:#ff5252}
+  .wo-now{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
+  .wo-step{font-size:44px;font-weight:800;line-height:1;color:var(--accent)}
+  .wo-clock{font-size:60px;font-weight:800;line-height:1;color:var(--text);font-variant-numeric:tabular-nums}
+  .wo-next{font-size:11px;color:var(--dim);letter-spacing:1px;min-height:16px}
+  .wo-list{width:100%;max-width:300px;font-size:11px;color:var(--dim);line-height:1.8}
+  .wo-list .cur{color:var(--accent);font-weight:700}
+  .wo-list .done{opacity:0.4;text-decoration:line-through}
+
   /* ── Capability readout ── */
   .caps{width:100%;max-width:300px;font-size:10px;line-height:1.7;color:var(--dim);text-align:left;user-select:text}
   .caps .yes{color:var(--accent);font-weight:700}
@@ -234,6 +253,38 @@
   </div>
 </div>
 
+<!-- Workout panel -->
+<div class="panel hidden" id="panel-workout">
+  <div class="ctrl-stack">
+
+    <div class="ctrl-section" id="wo-edit">
+      <div class="ctrl-label">Intervals</div>
+      <div class="wo-rows" id="wo-rows"></div>
+      <div class="ctrl-btns" style="justify-content:center">
+        <button class="cue-btn" onclick="addStep()">+ Interval</button>
+        <button class="cue-btn" onclick="resetWorkout()">Reset</button>
+      </div>
+      <div class="start-stop">
+        <button class="start-btn" onclick="startWorkout()">Start workout</button>
+      </div>
+      <div class="ctrl-note">The app calls each change and beeps you onto the pace —
+        you set the belt with the paddle. It cannot move the belt itself.</div>
+    </div>
+
+    <div class="ctrl-section hidden" id="wo-run">
+      <div class="wo-now" id="wo-label">Interval 1</div>
+      <div class="wo-step" id="wo-target">--</div>
+      <div class="wo-clock" id="wo-clock">0:00</div>
+      <div class="wo-next" id="wo-next"></div>
+      <div class="wo-list" id="wo-list"></div>
+      <div class="start-stop">
+        <button class="stop-btn" onclick="stopWorkout()">End workout</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <!-- Control panel -->
 <div class="panel hidden" id="panel-control">
   <div class="ctrl-stack">
@@ -274,6 +325,7 @@
 <nav class="tabs hidden" id="tabs">
   <button class="tab active" id="tab-display" onclick="showPanel('display')">Display</button>
   <button class="tab" id="tab-speed" onclick="showPanel('speed')">Speed</button>
+  <button class="tab" id="tab-workout" onclick="showPanel('workout')">Workout</button>
   <button class="tab" id="tab-control" onclick="showPanel('control')">Control</button>
 </nav>
 
@@ -618,6 +670,153 @@ function updateTargetReadout(sk) {
   }
 }
 
+// ── Workout engine ─────────────────────────────────────────────
+// Does what the Wahoo app's planned-workout mode does, minus the one thing the
+// machine will not let us do: move the belt. The app calls each change and the
+// audio cues walk her onto the pace; the paddle does the moving.
+var DEFAULT_WORKOUT = [
+  {mph: 4, min: 5}, {mph: 6, min: 1}, {mph: 4, min: 2},
+  {mph: 6, min: 1}, {mph: 4, min: 2},
+];
+var workout = [];
+try { workout = JSON.parse(localStorage.getItem("workout")) || []; } catch (x) {}
+if (!workout.length) workout = DEFAULT_WORKOUT.map(function(s) { return {mph: s.mph, min: s.min}; });
+
+var wo = null;          // {i, stepStart, announced, startDk}
+var woTimer = null;
+
+function saveWorkout() {
+  localStorage.setItem("workout", JSON.stringify(workout));
+}
+
+function renderEditor() {
+  var box = document.getElementById("wo-rows");
+  box.innerHTML = "";
+  workout.forEach(function(step, idx) {
+    var row = document.createElement("div");
+    row.className = "wo-row";
+
+    var mph = document.createElement("input");
+    mph.type = "number"; mph.step = "0.1"; mph.min = "0"; mph.value = step.mph;
+    mph.inputMode = "decimal";
+    mph.onchange = function() { workout[idx].mph = parseFloat(mph.value) || 0; saveWorkout(); };
+
+    var u1 = document.createElement("span"); u1.className = "unit"; u1.textContent = "mph";
+
+    var min = document.createElement("input");
+    min.type = "number"; min.step = "0.5"; min.min = "0.5"; min.value = step.min;
+    min.inputMode = "decimal";
+    min.onchange = function() { workout[idx].min = parseFloat(min.value) || 0.5; saveWorkout(); };
+
+    var u2 = document.createElement("span"); u2.className = "unit"; u2.textContent = "min";
+
+    var del = document.createElement("button");
+    del.className = "wo-del"; del.textContent = "×";
+    del.onclick = function() { workout.splice(idx, 1); saveWorkout(); renderEditor(); };
+
+    [mph, u1, min, u2, del].forEach(function(el) { row.appendChild(el); });
+    box.appendChild(row);
+  });
+}
+
+function addStep() {
+  var last = workout[workout.length - 1];
+  workout.push({mph: last ? last.mph : 5, min: last ? last.min : 1});
+  saveWorkout(); renderEditor();
+}
+
+function resetWorkout() {
+  workout = DEFAULT_WORKOUT.map(function(s) { return {mph: s.mph, min: s.min}; });
+  saveWorkout(); renderEditor();
+}
+
+function say(text) {
+  try {
+    if (window.speechSynthesis) {
+      var u = new SpeechSynthesisUtterance(text);
+      u.rate = 1.05;
+      window.speechSynthesis.speak(u);
+    }
+  } catch (x) {}
+}
+
+function startWorkout() {
+  if (!workout.length) return;
+  ensureAudio();                     // inside a tap, so audio is allowed to start
+  wo = {i: -1, stepStart: 0, announced: false, startDk: lastDk};
+  document.getElementById("wo-edit").classList.add("hidden");
+  document.getElementById("wo-run").classList.remove("hidden");
+  nextStep();
+  woTimer = setInterval(woTick, 250);
+}
+
+function stopWorkout() {
+  if (woTimer) clearInterval(woTimer);
+  woTimer = null; wo = null;
+  clearTarget();
+  document.getElementById("wo-edit").classList.remove("hidden");
+  document.getElementById("wo-run").classList.add("hidden");
+  say("Workout ended");
+}
+
+function nextStep() {
+  wo.i += 1;
+  if (wo.i >= workout.length) {
+    beep(880, 120);
+    setTimeout(function() { beep(1320, 220); }, 140);
+    say("Workout complete. Well done.");
+    stopWorkout();
+    return;
+  }
+  var step = workout[wo.i];
+  wo.stepStart = Date.now();
+  wo.announced = false;
+  applyTarget(toKmh(step.mph));      // snaps, arms the cues, updates the display
+  var shown = fromKmh(targetKmh);
+  document.getElementById("wo-label").textContent =
+    "Interval " + (wo.i + 1) + " of " + workout.length;
+  document.getElementById("wo-target").textContent =
+    shown.toFixed(1) + (useMetric ? " km/h" : " mph");
+  say((wo.i === 0 ? "Start at " : "Now ") + shown.toFixed(1) +
+      (useMetric ? " kilometres per hour" : " miles per hour"));
+  renderList();
+}
+
+function renderList() {
+  var el = document.getElementById("wo-list");
+  el.innerHTML = "";
+  workout.forEach(function(step, idx) {
+    var d = document.createElement("div");
+    d.className = idx === wo.i ? "cur" : (idx < wo.i ? "done" : "");
+    d.textContent = (idx + 1) + ".  " + step.mph + " mph  ·  " + step.min + " min";
+    el.appendChild(d);
+  });
+}
+
+function woTick() {
+  if (!wo) return;
+  var step = workout[wo.i];
+  var elapsed = (Date.now() - wo.stepStart) / 1000;
+  var left = Math.max(0, step.min * 60 - elapsed);
+
+  var m = Math.floor(left / 60), s = Math.floor(left % 60);
+  document.getElementById("wo-clock").textContent = m + ":" + String(s).padStart(2, "0");
+
+  var nxt = workout[wo.i + 1];
+  document.getElementById("wo-next").textContent =
+    nxt ? "next: " + nxt.mph + " mph for " + nxt.min + " min" : "last interval";
+
+  // Call the change 12s early so she has time to paddle onto it
+  if (!wo.announced && nxt && left <= 12) {
+    wo.announced = true;
+    var faster = nxt.mph > step.mph;
+    beep(faster ? 660 : 520, 90);
+    say("In ten seconds, " + (faster ? "speed up to " : "ease down to ") + nxt.mph);
+  }
+
+  if (left <= 0) nextStep();
+}
+
 // Diagnostic only — expected to come back "not supported"
 function testSpeedWrite() {
   sendSpeed(targetKmh !== null ? targetKmh : 5);
@@ -771,7 +970,7 @@ function stopTreadmill() {
 
 // Panel switching
 function showPanel(name) {
-  ["display", "speed", "control"].forEach(function(p) {
+  ["display", "speed", "workout", "control"].forEach(function(p) {
     document.getElementById("panel-" + p).classList.toggle("hidden", p !== name);
     document.getElementById("tab-" + p).classList.toggle("active", p === name);
   });
@@ -866,6 +1065,7 @@ updateTargetReadout(0);
 var cueBtn = document.getElementById("cue-btn");
 cueBtn.textContent = "Cues: " + (cuesOn ? "on" : "off");
 cueBtn.classList.toggle("on", cuesOn);
+renderEditor();
 </script>
 </body>
 </html>
