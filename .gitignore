@@ -12,3 +12,11 @@ node_modules/
 .venv/
 __pycache__/
 *.pyc
+
+# Bluetooth captures — these record ALL HCI traffic from the phone, not just
+# the treadmill (watch, headphones, car), so they never belong in a public repo.
+captures/
+*.pklg
+*.pcap
+*.pcapng
+*.btsnoop
