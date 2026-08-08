@@ -232,6 +232,14 @@ Practical notes:
 
 `scripts/dircon_explore.py` implements the read-only side of this.
 
+**The Wahoo phone app does not use DIRCON.** Tested 2026-08-08: a proxy
+advertising as `KICKR RUN PROXY` was visible on the network alongside the real
+machine, but never appeared in the Wahoo app's device list and was never
+connected to. The app pairs sensors over Bluetooth only. DIRCON is aimed at
+training apps (Zwift, SYSTM, FulGaz), which control incline rather than speed —
+so proxying DIRCON cannot capture the pace-target command. Capturing it needs a
+Bluetooth HCI trace of the phone (`scripts/analyze_capture.py`).
+
 ## Prior art — none
 
 Checked 2026-08-01:
