@@ -285,9 +285,14 @@
     <div class="ctrl-divider"></div>
     <div class="ctrl-section">
       <div class="ctrl-label">Weight (~cal)</div>
+      <div class="unit-sw">
+        <button id="wu-kg" onclick="setWeightUnit('kg')">kg</button>
+        <button id="wu-lb" onclick="setWeightUnit('lb')">lb</button>
+        <button id="wu-st" onclick="setWeightUnit('st')">stone</button>
+      </div>
       <div class="ctrl-btns">
         <button class="ctrl-btn" onclick="adjustWeight(-1)">−</button>
-        <div class="ctrl-val" id="weight-val" style="min-width:80px;text-align:center">70 kg</div>
+        <div class="ctrl-val" id="weight-val" style="min-width:110px;text-align:center;font-size:clamp(20px,5.4vw,32px);white-space:nowrap">70 kg</div>
         <button class="ctrl-btn" onclick="adjustWeight(1)">+</button>
       </div>
     </div>
@@ -316,6 +321,8 @@
 
 <script>
 var userWeightKg = parseFloat(localStorage.getItem("weightKg") || "70");
+var KG_PER_LB = 0.45359237;
+var weightUnit = localStorage.getItem("weightUnit") || "kg";   // kg | lb | st
 applyTheme(localStorage.getItem("theme") || "light");
 var VERSION = "2026-08-29.1";
 var FTMS = 0x1826, TDATA = 0x2ACD, FTMS_CP = 0x2AD9;
@@ -959,7 +966,7 @@ function toggleTheme() {
 }
 
 // Weight buttons
-document.getElementById("weight-val").textContent = userWeightKg + " kg";
+renderWeight();
 document.getElementById("ver").textContent = "v" + VERSION;
 
 setUnit(localStorage.getItem("useMetric") === "1");
@@ -971,11 +978,38 @@ updateTargetReadout(0);
 var cueBtn = document.getElementById("cue-btn");
 cueBtn.textContent = "Cues: " + (cuesOn ? "on" : "off");
 cueBtn.classList.toggle("on", cuesOn);
+// Weight is always held in kg because the calorie estimate needs it; the unit
+// only changes how it is shown and how much one press moves it. A stone is far
+// too coarse a step, so stone mode nudges by a pound like lb mode does.
+function setWeightUnit(u) {
+  weightUnit = u;
+  localStorage.setItem("weightUnit", u);
+  renderWeight();
+}
+
+function renderWeight() {
+  var lb = userWeightKg / KG_PER_LB, text;
+  if (weightUnit === "lb") {
+    text = Math.round(lb) + " lb";
+  } else if (weightUnit === "st") {
+    var st = Math.floor(lb / 14), rem = Math.round(lb - st * 14);
+    if (rem === 14) { st += 1; rem = 0; }
+    text = rem ? st + " st " + rem + " lb" : st + " st";
+  } else {
+    text = Math.round(userWeightKg) + " kg";
+  }
+  document.getElementById("weight-val").textContent = text;
+  ["kg", "lb", "st"].forEach(function(u) {
+    var b = document.getElementById("wu-" + u);
+    if (b) b.classList.toggle("on", weightUnit === u);
+  });
+}
+
 function adjustWeight(delta) {
-  var v = Math.min(250, Math.max(30, userWeightKg + delta));
-  userWeightKg = v;
-  localStorage.setItem("weightKg", v);
-  document.getElementById("weight-val").textContent = v + " kg";
+  var step = weightUnit === "kg" ? 1 : KG_PER_LB;
+  userWeightKg = Math.min(250, Math.max(30, userWeightKg + delta * step));
+  localStorage.setItem("weightKg", userWeightKg);
+  renderWeight();
 }
 
 // Desktop popup launcher
