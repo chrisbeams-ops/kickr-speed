@@ -77,6 +77,15 @@
   .grade-btn:active{background:var(--accent);color:var(--bg)}
   .grade-btn.active{border-color:var(--accent);color:var(--accent)}
 
+  /* ── Paddle prompt — the machine will not change speed until this is obeyed ── */
+  #paddle{display:none;position:fixed;top:0;left:0;right:0;z-index:60;
+    background:#ffb020;color:#1a1200;text-align:center;padding:18px 12px;
+    font-family:"JetBrains Mono",monospace;font-weight:800;font-size:17px;letter-spacing:3px;
+    animation:paddlePulse 1s ease-in-out infinite}
+  #paddle.confirmed{background:var(--accent);color:var(--bg);animation:none}
+  @keyframes paddlePulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.28)}}
+  @media (prefers-reduced-motion:reduce){#paddle{animation:none}}
+
   /* ── Speed presets ── */
   .speed-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;max-width:300px}
   .speed-btn{font-family:"JetBrains Mono",monospace;font-size:18px;font-weight:800;color:var(--text);background:var(--border);border:2px solid transparent;border-radius:12px;padding:18px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.1s,color 0.1s,border-color 0.1s;text-align:center}
@@ -121,6 +130,7 @@
 </head>
 <body>
 
+<div id="paddle">◄ TAP THE SPEED PADDLE ►</div>
 <div class="dot" id="dot"></div>
 
 <!-- Connect overlay -->
@@ -197,9 +207,10 @@
         <button class="cue-btn" id="cue-btn" onclick="toggleCues()">Cues: on</button>
         <button class="cue-btn" onclick="clearTarget()">Clear target</button>
       </div>
-      <div class="ctrl-note">Pick a speed, then paddle until it beeps. Low beeps mean speed up,
-        high beeps mean ease off, and they quicken as you close in — a two-note chime means
-        you are there.</div>
+      <div class="ctrl-note">Speed control: <span id="speed-status" style="color:var(--dim)">not connected</span></div>
+      <div class="ctrl-note">Tap a speed, then tap the paddle when prompted and the belt goes there.
+        The paddle tap is the treadmill's own safety step and cannot be skipped. The physical
+        stop button and paddles always override the app.</div>
     </div>
   </div>
 </div>
@@ -258,10 +269,24 @@
 <script>
 var userWeightKg = parseFloat(localStorage.getItem("weightKg") || "70");
 applyTheme(localStorage.getItem("theme") || "light");
-var VERSION = "2026-08-08.1";
+var VERSION = "2026-08-29.1";
 var FTMS = 0x1826, TDATA = 0x2ACD, FTMS_CP = 0x2AD9;
 var RSC = 0x1814, RSC_MEAS = 0x2A53;
+
+// Wahoo's proprietary command channel — the only way to set belt speed. FTMS
+// refuses it: 0x2ACC reports no speed-target support and 0x2AD9 answers
+// "op code not supported". Protocol per qdomyos-zwift PR #4834.
+// a026e002 looks identical in its properties but is a debug stream that
+// silently swallows writes — match this UUID exactly.
+var WAHOO_CMD = "a026e03e-0a7d-4ab3-97fa-f1500f9feb8b";
+var WAHOO_SERVICES = [];
+for (var wi = 1; wi <= 20; wi++) {
+  WAHOO_SERVICES.push("a026ee" + (wi < 16 ? "0" : "") + wi.toString(16) +
+                      "-0a7d-4ab3-97fa-f1500f9feb8b");
+}
+
 var dev = null, st = null, ti = null, cpChar = null, hasControl = false;
+var wahooChar = null, wahooId = null, wahooUnlocked = false, wahooFirstSend = false;
 var useMetric = false;
 var lastSk = 0, lastDk = null, lastInc = null, sessionStartDk = null;
 var calAccum = 0, lastDataTime = 0;
@@ -286,7 +311,12 @@ cb.addEventListener("click", async function() {
   cb.textContent = "Connecting...";
   cb.disabled = true;
   try {
-    dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [FTMS] }] });
+    // The Wahoo services must be declared here or getPrimaryServices() will not
+    // return them, and speed control is unreachable.
+    dev = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [FTMS] }],
+      optionalServices: [FTMS, RSC].concat(WAHOO_SERVICES)
+    });
     dev.addEventListener("gattserverdisconnected", onDC);
     var srv = await dev.gatt.connect();
     var svc = await srv.getPrimaryService(FTMS);
@@ -295,6 +325,7 @@ cb.addEventListener("click", async function() {
     ch.addEventListener("characteristicvaluechanged", onD);
     tryRSC(srv);
     tryCP(svc);
+    tryWahoo(srv);
     ov.classList.add("hidden");
     dt.classList.add("on");
     ft.classList.remove("hidden");
@@ -464,11 +495,111 @@ async function writeCP(buf) {
   } catch(x) {}
 }
 
+// ── Wahoo speed control ────────────────────────────────────────
+// Sequence: init bytes, then the machine sends its device id, we ack it, unlock
+// once, then send speeds. Every speed change is gated on the runner physically
+// tapping the paddle — the machine issues a challenge only after the paddle
+// sensor fires, so that interlock cannot be bypassed from here, by design.
+function wahooSleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+async function writeWahoo(bytes) {
+  if (!wahooChar) return;
+  var b = new Uint8Array(bytes);
+  try {
+    if (wahooChar.writeValueWithoutResponse) await wahooChar.writeValueWithoutResponse(b);
+    else await wahooChar.writeValue(b);
+  } catch (x) {}
+}
+
+async function tryWahoo(srv) {
+  try {
+    var services = await srv.getPrimaryServices();
+    for (var i = 0; i < services.length; i++) {
+      var chars = [];
+      try { chars = await services[i].getCharacteristics(); } catch (x) { continue; }
+      for (var j = 0; j < chars.length; j++) {
+        if (chars[j].uuid === WAHOO_CMD) {
+          wahooChar = chars[j];
+          await wahooChar.startNotifications();
+          wahooChar.addEventListener("characteristicvaluechanged", onWahooNotify);
+          setSpeedStatus("starting up…");
+          for (var k = 0, seq = [0x01, 0x10, 0x12, 0x18, 0x80, 0x86, 0xF0]; k < seq.length; k++) {
+            await writeWahoo([seq[k]]);
+            await wahooSleep(120);
+          }
+          return;
+        }
+      }
+    }
+  } catch (x) {}
+  wahooChar = null;
+  setSpeedStatus("no speed control — set the belt yourself");
+}
+
+function onWahooNotify(e) {
+  var v = new Uint8Array(e.target.value.buffer);
+
+  // FE 86 01 [id x4] — machine announces itself, we ack with 87 + id
+  if (v.length >= 7 && v[0] === 0xFE && v[1] === 0x86 && v[2] === 0x01 && !wahooId) {
+    wahooId = v.slice(3, 7);
+    writeWahoo([0x87, wahooId[0], wahooId[1], wahooId[2], wahooId[3]]);
+    setSpeedStatus("ready");
+    return;
+  }
+  // FD E0 02 — machine is waiting for the paddle
+  if (v.length >= 3 && v[0] === 0xFD && v[1] === 0xE0 && v[2] === 0x02) {
+    showPaddle(true);
+    return;
+  }
+  // FD E0 01 hi lo — paddle tapped, echo the challenge back
+  if (v.length >= 5 && v[0] === 0xFD && v[1] === 0xE0 && v[2] === 0x01) {
+    writeWahoo([0xE0, v[3], v[4]]);
+    showPaddle("confirmed");
+    return;
+  }
+}
+
+var paddleTimer = null;
+function showPaddle(state) {
+  var el = document.getElementById("paddle");
+  if (!el) return;
+  clearTimeout(paddleTimer);
+  if (state === true) {
+    el.className = "";
+    el.style.display = "block";
+    el.textContent = "◄ TAP THE SPEED PADDLE ►";
+  } else if (state === "confirmed") {
+    el.className = "confirmed";
+    el.style.display = "block";
+    el.textContent = "CONFIRMED";
+    paddleTimer = setTimeout(function() { el.style.display = "none"; }, 1800);
+  } else {
+    el.style.display = "none";
+  }
+}
+
+function setSpeedStatus(text) {
+  var el = document.getElementById("speed-status");
+  if (el) el.textContent = text;
+}
+
+// Speed is sent as micrometres per second, little-endian over 3 bytes. The flag
+// byte is FF on the first send of a session and 0A on every one after.
+async function sendBeltSpeed(kmh) {
+  if (!wahooChar) return;
+  var capped = Math.min(MAX_KMH, Math.max(0, kmh));
+  if (!wahooUnlocked) {
+    wahooUnlocked = true;
+    await writeWahoo([0x19, 0x00]);
+    await wahooSleep(120);
+  }
+  var um = Math.round(capped / 3.6 * 1e6);
+  var flag = wahooFirstSend ? 0x0A : 0xFF;
+  wahooFirstSend = true;
+  await writeWahoo([0x02, um & 0xFF, (um >> 8) & 0xFF, (um >> 16) & 0xFF, 0x00, flag]);
+}
+
 // ── Speed targets ──────────────────────────────────────────────
-// The KICKR RUN will not accept speed commands — its Fitness Machine Feature
-// characteristic reports no speed-target support, and the control point returns
-// "op code not supported". So a target here is purely local: pick a speed, and
-// the app tells you when the belt has reached it.
 var MAX_KMH = 20;
 var MPH_PRESETS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 var KMH_PRESETS = [3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20];
@@ -491,14 +622,17 @@ function buildSpeedGrid() {
   });
 }
 
+// No longer snapped to 0.1 km/h — that was a guess made when the app could only
+// display a target. The machine takes the exact speed we ask for.
 function applyTarget(kmh) {
   var clamped = Math.min(MAX_KMH, Math.max(0, kmh));
-  targetKmh = Math.round(clamped * 10) / 10;
+  targetKmh = Math.round(clamped * 100) / 100;
   localStorage.setItem("targetKmh", targetKmh);
   ensureAudio();
   armCues();
   updateTargetUI();
   updateTargetReadout(lastSk);
+  sendBeltSpeed(targetKmh);      // no-op when the command channel is unavailable
 }
 
 function clearTarget() {
@@ -661,6 +795,9 @@ function onDC() {
   ft.classList.add("hidden");
   tabs.classList.add("hidden");
   cpChar = null; hasControl = false;
+  wahooChar = null; wahooId = null; wahooUnlocked = false; wahooFirstSend = false;
+  showPaddle(false);
+  setSpeedStatus("not connected");
   document.getElementById("ctrl-status").textContent = "waiting…";
   document.getElementById("ctrl-status").style.color = "var(--dim)";
   calAccum = 0; lastDataTime = 0;
