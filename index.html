@@ -502,24 +502,11 @@ function stopBelt() {
   localStorage.removeItem("targetKmh");
   updateTargetUI();
   updateTargetReadout(lastSk);
-  setSpeedStatus("stopping…");
-
-  // FTMS stop first. Any speed sent on Wahoo's channel goes through the paddle
-  // interlock, so a zero-speed command makes the runner confirm before the belt
-  // slows — no use in a stop. The FTMS opcode may bypass that.
-  var before = lastSk;
-  if (cpChar) writeCP(new Uint8Array([0x08, 0x01]));
-
-  // If the belt has not started slowing, fall back to the zero-speed command,
-  // which does work but will ask for the paddle.
-  setTimeout(function() {
-    if (lastSk > 0.5 && lastSk > before - 0.3) {
-      setSpeedStatus("stop needs the paddle");
-      sendBeltSpeed(0);
-    } else {
-      setSpeedStatus("stopped");
-    }
-  }, 1800);
+  // Straight to zero speed. The FTMS stop opcode is not honoured by this machine
+  // — tested, the belt kept running — so trying it first only added a delay
+  // before the paddle prompt appeared.
+  setSpeedStatus("tap the paddle to stop");
+  sendBeltSpeed(0);
 }
 
 // RSC cadence — no optionalServices declaration so Bluefy stays happy

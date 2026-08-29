@@ -1,10 +1,50 @@
 # KICKR RUN — observed BLE protocol
 
-Notes from a read-only GATT dump (`explore.html`) of a KICKR RUN 6D7C.
-Firmware `2.0.43`, hardware rev `7`, manufacturer `Wahoo Fitness`.
+Notes from a KICKR RUN 6D7C. Firmware `2.0.43`, hardware rev `7`, manufacturer
+`Wahoo Fitness`.
 
-Confidence is marked per field. Nothing here was produced by writing to the
-machine — it is all read and notify traffic.
+> **Speed control is solved and working.** Much of this document was written
+> while concluding the opposite. Those sections are kept because the measurements
+> are sound and the negative results are still useful, but where they conclude
+> speed control is impossible, they are **superseded by the section below**.
+
+## Setting belt speed — WORKING
+
+Protocol from qdomyos-zwift PR #4834 (an HCI trace of the Wahoo app), implemented
+in `index.html` and `intervals.html`, verified on the machine.
+
+Command characteristic: **`a026e03e`** (write-without-response + notify), in
+service `a026ee0e`. Do not confuse it with `a026e002`, which has identical
+properties but is a debug stream that silently swallows writes.
+
+```
+init       01, 10, 12, 18, 80, 86, F0     single bytes, ~120 ms apart
+handshake  <- FE 86 01 [id x4]            machine announces itself
+           -> 87 [id x4]                  app acks
+unlock     19 00                          once per session
+set speed  02 [LE24 um/s] 00 [flag]       flag FF on first send, 0A after
+                                          um/s = round(kmh / 3.6 * 1e6)
+paddle     <- FD E0 02                    machine waiting for the paddle
+           <- FD E0 01 [hi][lo]           paddle tapped, challenge issued
+           -> E0 [hi][lo]                 app echoes it back
+target ack <- FF 01 [LE24 um/s]
+```
+
+The µm/s unit independently matches the telemetry decode below (checked to 0.17%),
+which is a useful cross-confirmation from two unrelated sources.
+
+**The paddle tap cannot be bypassed.** The challenge only exists after the
+physical paddle sensor fires, so there is nothing to echo until a human taps it.
+That is a deliberate firmware interlock and the reason app-driven speed is safe
+to offer at all.
+
+**Why this was missed for a long time:** a naive replay of the incline *status*
+frame to `a026e03e` with no init, handshake or unlock is acknowledged with
+`FE FD 02` and does nothing — which reads exactly like a read-only channel. It
+isn't; it just hadn't been opened.
+
+Confidence is marked per field below. Except where stated, the rest of this
+document is read and notify traffic only.
 
 ## Services
 
@@ -93,8 +133,11 @@ The speed decode was checked against FTMS across six samples: the ratio
 
 ### `a026e03e` (service `a026ee0e`) — target setting
 
-**This is a status mirror, not a command channel.** It reports every target
-change with its origin, whatever set it. Incline itself is commanded over FTMS
+> **Superseded.** This *is* the command channel — see "Setting belt speed" at the
+> top. It also reports target changes, which is what led to the wrong conclusion
+> below. Both things are true: it reports, and it accepts commands once opened.
+
+It reports every incline target change with its origin, whatever set it. Incline itself is commanded over FTMS
 (`0x2AD9` opcode `0x03`) — which is how Zwift and this app already control it —
 so what appears here is the announcement, not the instruction.
 
@@ -262,7 +305,15 @@ training apps (Zwift, SYSTM, FulGaz), which control incline rather than speed �
 so proxying DIRCON cannot capture the pace-target command. Capturing it needs a
 Bluetooth HCI trace of the phone (`scripts/analyze_capture.py`).
 
-## Prior art — none
+## Stop
+
+The FTMS stop opcode (`0x2AD9` `08 01`) is **not honoured** — tested with the belt
+running, which kept going. Stopping from software means sending zero speed on
+Wahoo's channel, which goes through the paddle interlock like any other speed
+change. There is no software path to an immediate stop; the physical stop button
+is the only instant one.
+
+## Prior art — found, eventually
 
 Checked 2026-08-01:
 
@@ -275,9 +326,13 @@ Checked 2026-08-01:
 - The community-documented Wahoo trainer control characteristic is `a026e005`,
   which this treadmill does not expose. That work does not transfer.
 
-The command formats cannot be derived from telemetry. The only route is
-capturing the Wahoo app's writes — which is also how the trainer protocol was
-originally worked out.
+The command formats cannot be derived from telemetry, and that conclusion was
+right. What was wrong was concluding nobody had captured them: **qdomyos-zwift PR
+#4834** contains the full protocol from an HCI trace, in
+`src/devices/wahookickruntreadmill/`. It was unmerged, so it appeared in neither
+code search nor the repository's device list.
+
+Lesson: search open pull requests and branches, not just merged code.
 
 ## Open questions
 
