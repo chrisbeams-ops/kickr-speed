@@ -292,9 +292,9 @@
 </div>
 
 <nav class="tabs hidden" id="tabs">
-  <button class="tab active" id="tab-display" onclick="showPanel('display')">Display</button>
-  <button class="tab" id="tab-speed" onclick="showPanel('speed')">Speed</button>
-  <button class="tab" id="tab-control" onclick="showPanel('control')">Control</button>
+  <button class="tab" id="tab-display" onclick="showPanel('display')">Display</button>
+  <button class="tab active" id="tab-speed" onclick="showPanel('speed')">Speed</button>
+  <button class="tab" id="tab-control" onclick="showPanel('control')">Incline</button>
 </nav>
 
 <!-- Footer -->
@@ -386,6 +386,7 @@ async function doConnect(basic) {
     ft.classList.remove("hidden");
     tabs.classList.remove("hidden");
     document.getElementById("stopwrap").classList.remove("hidden");
+    showPanel("speed");
     st = Date.now();
     ti = setInterval(uT, 1000);
     if ("wakeLock" in navigator) {
@@ -911,7 +912,7 @@ function onDC() {
   document.getElementById("lpv").textContent = "--:--";
   updateTargetUI();          // keep the chosen target across a reconnect
   updateTargetReadout(0);
-  showPanel("display");
+  showPanel("speed");
   setTimeout(function() {
     ov.classList.remove("hidden");
     cb.textContent = "Reconnect";
