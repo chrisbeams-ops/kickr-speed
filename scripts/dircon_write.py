@@ -38,7 +38,7 @@ RESP = {
 
 # Short SIG names must be 4 hex chars — an 8-char name gets Wahoo's base
 # appended and silently becomes a UUID that does not exist.
-WATCH = ["2acd", "2ada", "a026e03e", "a026e040"]
+WATCH = ["2acd", "2ada", "2ad9", "a026e03e"]
 
 
 def full_uuid(short):
@@ -131,6 +131,7 @@ def main():
     ap.add_argument("--port", type=int, default=PORT)
     ap.add_argument("--char", required=True, help="characteristic, e.g. a026e03e")
     ap.add_argument("--data", required=True, help="hex bytes, e.g. \"FD 02 32 00 00\"")
+    ap.add_argument("--pre", help="hex bytes written first, e.g. \"00\" for FTMS request control")
     ap.add_argument("--restore", help="hex bytes written at the end to undo")
     ap.add_argument("--watch", type=int, default=12, help="seconds to observe after the write")
     args = ap.parse_args()
@@ -152,6 +153,17 @@ def main():
         except (TimeoutError, ConnectionError, OSError) as e:
             print(f"  cannot watch {name}: {e}")
         time.sleep(0.4)
+
+    if args.pre:
+        pp = bytes.fromhex(args.pre.replace(" ", ""))
+        print(f"\n>>> PRE   {label(target)}  {pp.hex(' ').upper()}")
+        seq += 1
+        try:
+            resp, _ = txn(sock, MSG_WRITE, seq, target + pp)
+            print(f">>> response: {RESP.get(resp, resp)}")
+        except (TimeoutError, ConnectionError, OSError) as e:
+            print(f">>> pre-write failed: {e}")
+        drain(sock, 3)
 
     print(f"\n>>> WRITE {label(target)}  {payload.hex(' ').upper()}")
     seq += 1
