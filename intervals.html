@@ -58,6 +58,14 @@
     border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:9px 10px;width:86px}
   input:focus{outline:1px solid var(--data)}
 
+  /* quick speeds */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px}
+  .spd-btn{padding:12px 6px;text-align:center;border-radius:10px}
+  .spd-btn b{display:block;font-family:var(--mono);font-size:22px;font-weight:700;color:var(--data)}
+  .spd-btn span{font-family:var(--mono);font-size:10px;color:var(--dim)}
+  .spd-btn.sel{border-color:var(--data);background:rgba(53,167,255,.12)}
+  .nudge{flex:1;font-family:var(--mono);font-weight:700;padding:12px 0}
+
   /* workout table */
   table{width:100%;border-collapse:collapse}
   th{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--faint);text-align:left;padding:4px 6px;text-transform:uppercase}
@@ -109,13 +117,20 @@
   </div>
 
   <div class="card">
-    <div class="label">Single speed test — do this first</div>
+    <div class="label">Quick speeds — tap to send</div>
+    <div class="grid" id="presets"></div>
     <div class="row">
-      <input type="number" id="testSpd" value="4.0" step="0.5" min="0.8" max="27"> km/h
-      <button id="btnTest" disabled>Send speed</button>
-      <button class="danger" id="btnWalk" disabled>Drop to 3.0</button>
+      <button class="nudge" data-n="-0.5" disabled>−0.5</button>
+      <button class="nudge" data-n="-0.1" disabled>−0.1</button>
+      <button class="nudge" data-n="0.1" disabled>+0.1</button>
+      <button class="nudge" data-n="0.5" disabled>+0.5</button>
     </div>
-    <div class="note">Start with a walking pace while standing on the side rails. The physical <b>STOP button and paddles always override</b> anything this app sends.</div>
+    <div class="row" style="margin-top:8px">
+      <input type="number" id="testSpd" value="4.0" step="0.5" min="0.8" max="27"> km/h
+      <button id="btnTest" disabled>Send</button>
+      <button class="danger" id="btnWalk" disabled>Walk 3.0</button>
+    </div>
+    <div class="note">First time: stand on the side rails and send 4.0. The physical <b>STOP button and paddles always override</b> anything this app sends.</div>
   </div>
 
   <div class="card">
@@ -209,7 +224,7 @@ $('btnConnect').onclick = async () => {
     await btInit();
     $('dot').className='dot on';
     $('btnConnect').textContent='Connected';
-    $('btnTest').disabled=$('btnWalk').disabled=$('btnStart').disabled=false;
+    setControlsEnabled(true);
   }catch(e){ log('er',e.message); $('dot').className='dot'; }
 };
 
@@ -217,7 +232,7 @@ function onDisconnect(){
   log('er','disconnected');
   $('dot').className='dot'; $('btnConnect').textContent='Connect';
   cmdChar=null; initDone=false; unlocked=false; firstSpeedSent=false; deviceId=null;
-  $('btnTest').disabled=$('btnWalk').disabled=$('btnStart').disabled=true;
+  setControlsEnabled(false);
   stopWorkout(false);
 }
 
@@ -282,6 +297,7 @@ function showPaddle(state){
 /* ================= protocol: speed ================= */
 async function sendSpeed(kmh){
   kmh = Math.min(27, Math.max(0, kmh));
+  lastTarget = kmh;
   if(!unlocked){
     unlocked=true;
     await writeCmd([0x19,0x00],'workout unlock'); await sleep(120);
@@ -294,6 +310,40 @@ async function sendSpeed(kmh){
 }
 $('btnTest').onclick = () => sendSpeed(parseFloat($('testSpd').value)||0);
 $('btnWalk').onclick = () => sendSpeed(3.0);
+
+/* ===== quick speed presets — edit kmh/labels to taste ===== */
+const PRESETS = [
+  {kmh:4.0, label:'walk'},   {kmh:6.5, label:'brisk'},  {kmh:8.0, label:'jog'},
+  {kmh:9.0, label:'easy'},   {kmh:9.6, label:'easy+'},  {kmh:10.0,label:'tempo'},
+  {kmh:10.5,label:'tempo+'}, {kmh:12.0,label:'fast'},   {kmh:13.5,label:'stride'},
+];
+let lastTarget=null;
+function renderPresets(){
+  const g=$('presets'); g.innerHTML='';
+  PRESETS.forEach(p=>{
+    const b=document.createElement('button');
+    b.className='spd-btn'; b.disabled=!cmdChar;
+    b.innerHTML=`<b>${p.kmh.toFixed(1)}</b><span>${p.label} · ${paceStr(p.kmh)}/km</span>`;
+    b.onclick=()=>{ sendSpeed(p.kmh); markPreset(p.kmh); };
+    g.appendChild(b);
+  });
+}
+function markPreset(kmh){
+  [...document.querySelectorAll('.spd-btn')].forEach((b,i)=>
+    b.classList.toggle('sel', Math.abs(PRESETS[i].kmh-kmh)<0.001));
+}
+document.querySelectorAll('.nudge').forEach(b=>{
+  b.onclick=()=>{
+    const base = lastTarget ?? (parseFloat($('spd').textContent)||3.0);
+    const next = Math.min(27, Math.max(0.8, Math.round((base+parseFloat(b.dataset.n))*10)/10));
+    sendSpeed(next); markPreset(next);
+  };
+});
+renderPresets();
+function setControlsEnabled(on){
+  $('btnTest').disabled=$('btnWalk').disabled=$('btnStart').disabled=!on;
+  document.querySelectorAll('.spd-btn,.nudge').forEach(b=>b.disabled=!on);
+}
 
 /* ================= treadmill data (2ACD) ================= */
 function onTreadmillData(e){
