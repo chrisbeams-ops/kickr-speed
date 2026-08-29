@@ -86,6 +86,22 @@
   @keyframes paddlePulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.28)}}
   @media (prefers-reduced-motion:reduce){#paddle{animation:none}}
 
+  /* ── Stop belt — always reachable while connected ── */
+  .stopwrap{padding:8px 12px 4px;flex-shrink:0}
+  .stopwrap.hidden{display:none}
+  .stopbtn{width:100%;font-family:"JetBrains Mono",monospace;font-size:20px;font-weight:800;
+    letter-spacing:4px;color:#fff;background:#d32f2f;border:none;border-radius:12px;
+    padding:20px 0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .stopbtn:active{background:#b71c1c}
+
+  /* ── Unit switch ── */
+  .unit-sw{display:flex;gap:0;width:100%;max-width:300px;border:1px solid var(--border);
+    border-radius:8px;overflow:hidden}
+  .unit-sw button{flex:1;font-family:"JetBrains Mono",monospace;font-size:12px;font-weight:700;
+    letter-spacing:1px;color:var(--dim);background:none;border:none;padding:10px 0;cursor:pointer;
+    -webkit-tap-highlight-color:transparent}
+  .unit-sw button.on{background:var(--accent);color:var(--bg)}
+
   /* ── Speed presets ── */
   .speed-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;max-width:300px}
   .speed-btn{font-family:"JetBrains Mono",monospace;font-size:18px;font-weight:800;color:var(--text);background:var(--border);border:2px solid transparent;border-radius:12px;padding:18px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.1s,color 0.1s,border-color 0.1s;text-align:center}
@@ -194,6 +210,10 @@
 <div class="panel hidden" id="panel-speed">
   <div class="ctrl-stack">
     <div class="ctrl-section">
+      <div class="unit-sw">
+        <button id="unit-mph" onclick="setUnit(false)">mph</button>
+        <button id="unit-kmh" onclick="setUnit(true)">km/h</button>
+      </div>
       <div class="ctrl-label">Target pace</div>
       <div class="ctrl-val" id="target-val">-- <small>mph</small></div>
       <div class="belt" id="target-belt"></div>
@@ -252,6 +272,10 @@
 </div>
 
 <!-- Tab bar -->
+<div class="stopwrap hidden" id="stopwrap">
+  <button class="stopbtn" onclick="stopBelt()">STOP</button>
+</div>
+
 <nav class="tabs hidden" id="tabs">
   <button class="tab active" id="tab-display" onclick="showPanel('display')">Display</button>
   <button class="tab" id="tab-speed" onclick="showPanel('speed')">Speed</button>
@@ -330,6 +354,7 @@ cb.addEventListener("click", async function() {
     dt.classList.add("on");
     ft.classList.remove("hidden");
     tabs.classList.remove("hidden");
+    document.getElementById("stopwrap").classList.remove("hidden");
     st = Date.now();
     ti = setInterval(uT, 1000);
     if ("wakeLock" in navigator) {
@@ -427,14 +452,35 @@ function render(sk, dk, inc) {
   });
 }
 
-function toggleUnit() {
-  useMetric = !useMetric;
+function toggleUnit() { setUnit(!useMetric); }
+
+function setUnit(metric) {
+  useMetric = !!metric;
+  localStorage.setItem("useMetric", useMetric ? "1" : "0");
   document.getElementById("unit-lbl").textContent = useMetric ? "km/h" : "mph";
   document.getElementById("dist-lbl").textContent = useMetric ? "km" : "miles";
   document.getElementById("pace-lbl").textContent = useMetric ? "pace /km" : "pace /mi";
+  var m = document.getElementById("unit-mph"), k = document.getElementById("unit-kmh");
+  if (m) m.classList.toggle("on", !useMetric);
+  if (k) k.classList.toggle("on", useMetric);
   buildSpeedGrid();
   updateTargetUI();
   render(lastSk, lastDk, lastInc);
+}
+
+// Stop the belt. The physical stop button and safety key are the real emergency
+// stop — this is a convenience, and it depends on a Bluetooth link that can lag
+// or drop. Sends zero speed on Wahoo's channel and the FTMS stop opcode.
+function stopBelt() {
+  showPaddle(false);
+  cuesArmed = false;
+  targetKmh = null;
+  localStorage.removeItem("targetKmh");
+  updateTargetUI();
+  updateTargetReadout(lastSk);
+  sendBeltSpeed(0);
+  if (cpChar) writeCP(new Uint8Array([0x08, 0x01]));
+  setSpeedStatus("stop sent");
 }
 
 // RSC cadence — no optionalServices declaration so Bluefy stays happy
@@ -794,6 +840,7 @@ function onDC() {
   dt.classList.remove("on");
   ft.classList.add("hidden");
   tabs.classList.add("hidden");
+  document.getElementById("stopwrap").classList.add("hidden");
   cpChar = null; hasControl = false;
   wahooChar = null; wahooId = null; wahooUnlocked = false; wahooFirstSend = false;
   showPaddle(false);
@@ -857,6 +904,7 @@ function toggleTheme() {
 document.getElementById("weight-val").textContent = userWeightKg + " kg";
 document.getElementById("ver").textContent = "v" + VERSION;
 
+setUnit(localStorage.getItem("useMetric") === "1");
 var savedTarget = parseFloat(localStorage.getItem("targetKmh"));
 if (!isNaN(savedTarget)) targetKmh = savedTarget;
 buildSpeedGrid();
