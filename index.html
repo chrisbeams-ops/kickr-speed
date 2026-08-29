@@ -103,8 +103,14 @@
   .unit-sw button.on{background:var(--accent);color:var(--bg)}
 
   /* ── Speed presets ── */
-  .speed-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;max-width:300px}
-  .speed-btn{font-family:"JetBrains Mono",monospace;font-size:18px;font-weight:800;color:var(--text);background:var(--border);border:2px solid transparent;border-radius:12px;padding:18px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.1s,color 0.1s,border-color 0.1s;text-align:center}
+  /* Speed controls scale with the window — they get tapped mid-run, sometimes
+     from a treadmill deck at arm's length. */
+  .ctrl-section.wide{max-width:min(620px,94vw)}
+  .ctrl-section.wide .unit-sw{max-width:100%}
+  .ctrl-section.wide .ctrl-val{font-size:clamp(36px,9vw,72px)}
+  .ctrl-section.wide .ctrl-btn{font-size:clamp(24px,6vw,40px);padding:clamp(16px,3.2vh,30px) 0}
+  .speed-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:clamp(6px,1.4vw,14px);width:100%}
+  .speed-btn{font-family:"JetBrains Mono",monospace;font-size:clamp(20px,5.5vw,40px);font-weight:800;color:var(--text);background:var(--border);border:2px solid transparent;border-radius:14px;padding:clamp(16px,3.6vh,34px) 0;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.1s,color 0.1s,border-color 0.1s;text-align:center}
   .speed-btn:active{background:var(--accent);color:var(--bg)}
   .speed-btn.target{border-color:var(--accent);color:var(--accent)}
   .belt{font-size:10px;letter-spacing:1px;color:var(--dim);margin-top:-4px}
@@ -155,7 +161,7 @@
   <p>Connect to your treadmill to see speed, pace, distance, grade and cadence — and control speed and incline.</p>
   <button class="cbtn" id="cb">Connect</button>
   <div class="err" id="err" style="display:none"></div>
-  <button class="dc-btn" id="cb-basic" style="display:none" onclick="doConnect(true)">Connect without speed control</button>
+  <button class="dc-btn" id="cb-basic" style="display:none">Try the other connection method</button>
   <div class="popup-row" id="popupRow">
     <span style="font-size:10px;color:#3a3a42">or</span>
     <button class="popup-btn" onclick="launchPopup(120,500)">Launch as slim panel</button>
@@ -210,7 +216,7 @@
 <!-- Speed panel -->
 <div class="panel hidden" id="panel-speed">
   <div class="ctrl-stack">
-    <div class="ctrl-section">
+    <div class="ctrl-section wide">
       <div class="unit-sw">
         <button id="unit-mph" onclick="setUnit(false)">mph</button>
         <button id="unit-kmh" onclick="setUnit(true)">km/h</button>
@@ -333,12 +339,20 @@ if (!navigator.bluetooth) {
   er.style.display = "block";
 }
 
-// Connect. `basic` omits optionalServices, which is the original pre-speed-control
-// request — kept as an escape hatch because some iOS Web Bluetooth browsers refuse
-// the fuller one. Retrying automatically is not possible: requestDevice needs a
-// fresh user gesture, so this is offered as its own button.
-cb.addEventListener("click", function() { doConnect(false); });
+// The two browsers want opposite things. Chrome only exposes services named in
+// optionalServices, so it needs the declaration. Bluefy on iOS refuses to connect
+// when it is present, yet exposes every service regardless — so omitting it there
+// costs nothing and speed control still works. Default per platform, and offer the
+// other method if that guess is wrong.
+var IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent || "") ||
+             (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
+cb.addEventListener("click", function() { doConnect(IS_IOS); });
+document.getElementById("cb-basic")
+        .addEventListener("click", function() { doConnect(!IS_IOS); });
+
+// `basic` omits optionalServices. Retrying automatically is not possible:
+// requestDevice needs a fresh user gesture, so the alternative is its own button.
 async function doConnect(basic) {
   er.style.display = "none";
   document.getElementById("cb-basic").style.display = "none";
@@ -488,9 +502,24 @@ function stopBelt() {
   localStorage.removeItem("targetKmh");
   updateTargetUI();
   updateTargetReadout(lastSk);
-  sendBeltSpeed(0);
+  setSpeedStatus("stopping…");
+
+  // FTMS stop first. Any speed sent on Wahoo's channel goes through the paddle
+  // interlock, so a zero-speed command makes the runner confirm before the belt
+  // slows — no use in a stop. The FTMS opcode may bypass that.
+  var before = lastSk;
   if (cpChar) writeCP(new Uint8Array([0x08, 0x01]));
-  setSpeedStatus("stop sent");
+
+  // If the belt has not started slowing, fall back to the zero-speed command,
+  // which does work but will ask for the paddle.
+  setTimeout(function() {
+    if (lastSk > 0.5 && lastSk > before - 0.3) {
+      setSpeedStatus("stop needs the paddle");
+      sendBeltSpeed(0);
+    } else {
+      setSpeedStatus("stopped");
+    }
+  }, 1800);
 }
 
 // RSC cadence — no optionalServices declaration so Bluefy stays happy
