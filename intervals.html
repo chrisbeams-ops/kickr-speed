@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>KICKR RUN · Intervals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Chivo+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0e13; --panel:#121722; --panel2:#0f141d; --line:#1f2735;
+    --ink:#e8ecf4; --dim:#8b94a7; --faint:#5a6375;
+    --data:#35a7ff; --ok:#2fd07a; --warn:#ffb020; --bad:#ff4d5e;
+    --mono:'Chivo Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:'Archivo',-apple-system,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);min-height:100vh;padding-bottom:40px}
+  .wrap{max-width:640px;margin:0 auto;padding:16px}
+
+  header{display:flex;align-items:center;justify-content:space-between;padding:14px 0 10px}
+  .brand{font-family:var(--mono);font-weight:700;font-size:15px;letter-spacing:.12em}
+  .brand span{color:var(--data)}
+  .conn{display:flex;align-items:center;gap:10px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--faint);transition:background .3s}
+  .dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  .dot.busy{background:var(--warn)}
+  button{font-family:var(--sans);font-weight:600;font-size:14px;border:1px solid var(--line);
+    background:var(--panel);color:var(--ink);border-radius:8px;padding:9px 16px;cursor:pointer}
+  button:active{transform:translateY(1px)}
+  button.primary{background:var(--data);border-color:var(--data);color:#04101c}
+  button.danger{background:transparent;border-color:var(--bad);color:var(--bad)}
+  button:disabled{opacity:.35;cursor:default}
+
+  /* PADDLE BANNER — the moment this app exists for */
+  #paddle{display:none;position:sticky;top:0;z-index:50;margin:0 -16px 12px;
+    background:var(--warn);color:#1a1200;text-align:center;padding:16px 12px;
+    font-family:var(--mono);font-weight:700;font-size:17px;letter-spacing:.14em;
+    animation:pulse 1s ease-in-out infinite}
+  #paddle.confirmed{background:var(--ok);color:#04160c;animation:none}
+  @keyframes pulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.28)}}
+  @media (prefers-reduced-motion:reduce){#paddle{animation:none}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px}
+  .label{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--faint);text-transform:uppercase;margin-bottom:8px}
+
+  /* live speed */
+  .live{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap}
+  .big{font-family:var(--mono);font-weight:700;font-size:58px;line-height:1;color:var(--data);font-variant-numeric:tabular-nums}
+  .big small{font-size:18px;color:var(--dim);font-weight:400;margin-left:4px}
+  .sub{font-family:var(--mono);font-size:14px;color:var(--dim)}
+  .sub b{color:var(--ink);font-weight:500}
+  #target{font-family:var(--mono);font-size:13px;color:var(--warn);margin-top:6px;min-height:16px}
+
+  /* quick test */
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  input[type=number],input[type=text]{font-family:var(--mono);font-size:15px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:9px 10px;width:86px}
+  input:focus{outline:1px solid var(--data)}
+
+  /* workout table */
+  table{width:100%;border-collapse:collapse}
+  th{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--faint);text-align:left;padding:4px 6px;text-transform:uppercase}
+  td{padding:4px 6px}
+  td input{width:76px}
+  .pace{font-family:var(--mono);font-size:12px;color:var(--dim);white-space:nowrap}
+  .del{border:none;background:none;color:var(--faint);font-size:16px;padding:4px 8px}
+  .del:hover{color:var(--bad)}
+  tr.active td{background:rgba(53,167,255,.08)}
+  tr.done td{opacity:.38}
+  .totals{font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:8px}
+
+  /* runner */
+  #runner{display:none}
+  .countdown{font-family:var(--mono);font-weight:700;font-size:44px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .bar{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;margin:10px 0}
+  .bar i{display:block;height:100%;background:var(--data);width:0%;transition:width .25s linear}
+  .next{font-family:var(--mono);font-size:13px;color:var(--dim)}
+
+  /* log */
+  #log{font-family:var(--mono);font-size:11px;line-height:1.5;background:var(--panel2);
+    border:1px solid var(--line);border-radius:8px;padding:10px;height:170px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+  .tx{color:var(--ok)} .rx{color:var(--data)} .ev{color:var(--warn)} .er{color:var(--bad)}
+  .note{font-size:12px;color:var(--faint);margin-top:10px;line-height:1.5}
+  .note b{color:var(--warn)}
+</style>
+</head>
+<body>
+<div id="paddle">◄ TAP THE SPEED PADDLE ►</div>
+<div class="wrap">
+  <header>
+    <div class="brand">KICKR<span>RUN</span> · INTERVALS</div>
+    <div class="conn">
+      <div class="dot" id="dot"></div>
+      <button class="primary" id="btnConnect">Connect</button>
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="label">Belt speed</div>
+    <div class="live">
+      <div class="big" id="spd">0.00<small>km/h</small></div>
+      <div>
+        <div class="sub"><b id="pace">–:––</b> /km</div>
+        <div class="sub"><b id="mph">0.0</b> mph</div>
+      </div>
+    </div>
+    <div id="target"></div>
+  </div>
+
+  <div class="card">
+    <div class="label">Single speed test — do this first</div>
+    <div class="row">
+      <input type="number" id="testSpd" value="4.0" step="0.5" min="0.8" max="27"> km/h
+      <button id="btnTest" disabled>Send speed</button>
+      <button class="danger" id="btnWalk" disabled>Drop to 3.0</button>
+    </div>
+    <div class="note">Start with a walking pace while standing on the side rails. The physical <b>STOP button and paddles always override</b> anything this app sends.</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Workout</div>
+    <table id="tbl">
+      <thead><tr><th>#</th><th>km/h</th><th>mm:ss</th><th>pace</th><th></th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="row" style="margin-top:8px">
+      <button id="btnAdd">+ Add interval</button>
+      <button id="btnStart" class="primary" disabled>Start workout</button>
+      <button id="btnStop" class="danger" style="display:none">Stop</button>
+    </div>
+    <div class="totals" id="totals"></div>
+    <div id="runner">
+      <div class="bar"><i id="barFill"></i></div>
+      <div class="countdown" id="cd">0:00</div>
+      <div class="next" id="next"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">Protocol log <button id="btnCopy" style="float:right;font-size:11px;padding:3px 10px">copy</button></div>
+    <div id="log"></div>
+  </div>
+
+  <div class="note">Protocol per qdomyos-zwift PR #4834 (BLE HCI trace of a KICKR RUN). Cmd char a026e03e · speed = 0x02 + LE24 μm/s · paddle challenge auto-echoed. Serve over HTTPS (GitHub Pages) — Web Bluetooth won't run from file:// or inside an artifact preview.</div>
+</div>
+
+<script>
+'use strict';
+/* ================= UUIDs ================= */
+const WAHOO_BASE = i => `a026ee${i.toString(16).padStart(2,'0')}-0a7d-4ab3-97fa-f1500f9feb8b`;
+const WAHOO_SERVICES = Array.from({length:20},(_,i)=>WAHOO_BASE(i+1)); // a026ee01..a026ee14
+const CMD_CHAR   = 'a026e03e-0a7d-4ab3-97fa-f1500f9feb8b';
+const DEBUG_CHAR = 'a026e002-0a7d-4ab3-97fa-f1500f9feb8b'; // console stream — never write here
+const FTMS_SVC   = 0x1826, TREADMILL_DATA = 0x2acd;
+
+/* ================= state ================= */
+let device=null, cmdChar=null, deviceId=null;
+let unlocked=false, firstSpeedSent=false, initDone=false;
+let workout=[], runTimer=null, runState=null;
+
+/* ================= helpers ================= */
+const $ = id => document.getElementById(id);
+const hex = buf => [...new Uint8Array(buf.buffer||buf)].map(b=>b.toString(16).padStart(2,'0')).join(' ');
+function log(cls,msg){
+  const el=$('log'), t=new Date().toTimeString().slice(0,8);
+  el.innerHTML += `<span class="${cls}">${t} ${msg}</span>\n`;
+  el.scrollTop=el.scrollHeight;
+}
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+function paceStr(kmh){ if(kmh<=0.1) return '–:––';
+  const s=3600/kmh; return `${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,'0')}`; }
+function fmtT(sec){ return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`; }
+
+/* ================= BLE connect ================= */
+$('btnConnect').onclick = async () => {
+  try{
+    $('dot').className='dot busy';
+    device = await navigator.bluetooth.requestDevice({
+      filters:[{namePrefix:'KICKR RUN'},{namePrefix:'KICKR'},{services:[FTMS_SVC]}],
+      optionalServices:[FTMS_SVC, ...WAHOO_SERVICES]
+    });
+    device.addEventListener('gattserverdisconnected', onDisconnect);
+    log('ev',`connecting to ${device.name}…`);
+    const gatt = await device.gatt.connect();
+    const services = await gatt.getPrimaryServices();
+    log('ev',`services: ${services.map(s=>s.uuid.slice(0,8)).join(', ')}`);
+
+    for(const s of services){
+      let chars=[]; try{ chars = await s.getCharacteristics(); }catch(e){ continue; }
+      for(const c of chars){
+        if(c.uuid===CMD_CHAR){
+          cmdChar=c;
+          log('ev',`cmd char found in service ${s.uuid.slice(0,8)}`);
+          await c.startNotifications();
+          c.addEventListener('characteristicvaluechanged', onCmdNotify);
+        }
+        if(c.uuid===DEBUG_CHAR) log('ev','skipping a026e002 (debug stream)');
+        if(s.uuid===BluetoothUUID.getService(FTMS_SVC) &&
+           c.uuid===BluetoothUUID.getCharacteristic(TREADMILL_DATA)){
+          await c.startNotifications();
+          c.addEventListener('characteristicvaluechanged', onTreadmillData);
+          log('ev','subscribed treadmill data (2ACD)');
+        }
+      }
+    }
+    if(!cmdChar){ log('er','a026e03e not found — check nRF Connect for the Wahoo service UUID and tell Claude'); $('dot').className='dot'; return; }
+
+    await btInit();
+    $('dot').className='dot on';
+    $('btnConnect').textContent='Connected';
+    $('btnTest').disabled=$('btnWalk').disabled=$('btnStart').disabled=false;
+  }catch(e){ log('er',e.message); $('dot').className='dot'; }
+};
+
+function onDisconnect(){
+  log('er','disconnected');
+  $('dot').className='dot'; $('btnConnect').textContent='Connect';
+  cmdChar=null; initDone=false; unlocked=false; firstSpeedSent=false; deviceId=null;
+  $('btnTest').disabled=$('btnWalk').disabled=$('btnStart').disabled=true;
+  stopWorkout(false);
+}
+
+/* ================= protocol: init ================= */
+async function writeCmd(bytes, info){
+  if(!cmdChar) return;
+  const b = new Uint8Array(bytes);
+  await cmdChar.writeValueWithoutResponse(b);
+  log('tx',`>> ${hex(b)}  // ${info}`);
+}
+async function btInit(){
+  for(const b of [0x01,0x10,0x12,0x18,0x80,0x86,0xf0]){
+    await writeCmd([b],'init'); await sleep(120);
+  }
+  initDone=true;
+  log('ev','init sent — waiting for device ID (fe 86 01 …)');
+}
+
+/* ================= protocol: notifications ================= */
+function onCmdNotify(e){
+  const v = new Uint8Array(e.target.value.buffer);
+  log('rx',`<< ${hex(v)}`);
+
+  // FE 86 01 [id x4] → ack with 87+id
+  if(v.length>=7 && v[0]===0xFE && v[1]===0x86 && v[2]===0x01 && !deviceId){
+    deviceId = v.slice(3,7);
+    writeCmd([0x87,...deviceId],'device id ack');
+    log('ev','handshake complete — ready to command speed');
+    return;
+  }
+  // FD E0 02 — waiting for paddle
+  if(v.length>=3 && v[0]===0xFD && v[1]===0xE0 && v[2]===0x02){
+    showPaddle(true); return;
+  }
+  // FD E0 01 hi lo — paddle pushed, echo challenge
+  if(v.length>=5 && v[0]===0xFD && v[1]===0xE0 && v[2]===0x01){
+    writeCmd([0xE0,v[3],v[4]],'challenge response');
+    showPaddle('confirmed'); return;
+  }
+  // FF 01 [LE24 target μm/s]
+  if(v.length>=5 && v[0]===0xFF && v[1]===0x01){
+    const um = v[2] | (v[3]<<8) | (v[4]<<16);
+    const kmh = um/1e6*3.6;
+    $('target').textContent = kmh>0.05 ? `target ${kmh.toFixed(2)} km/h acknowledged` : '';
+  }
+}
+
+let paddleTimeout=null;
+function showPaddle(state){
+  const el=$('paddle');
+  clearTimeout(paddleTimeout);
+  if(state===true){
+    el.className=''; el.style.display='block';
+    el.textContent='◄ TAP THE SPEED PADDLE ►';
+  } else if(state==='confirmed'){
+    el.className='confirmed'; el.style.display='block';
+    el.textContent='PADDLE CONFIRMED';
+    paddleTimeout=setTimeout(()=>el.style.display='none',1800);
+  } else el.style.display='none';
+}
+
+/* ================= protocol: speed ================= */
+async function sendSpeed(kmh){
+  kmh = Math.min(27, Math.max(0, kmh));
+  if(!unlocked){
+    unlocked=true;
+    await writeCmd([0x19,0x00],'workout unlock'); await sleep(120);
+  }
+  const um = Math.round(kmh/3.6*1e6);
+  const flag = firstSpeedSent ? 0x0A : 0xFF;
+  firstSpeedSent = true;
+  await writeCmd([0x02, um&0xFF, (um>>8)&0xFF, (um>>16)&0xFF, 0x00, flag],
+    `forceSpeed ${kmh.toFixed(2)} km/h`);
+}
+$('btnTest').onclick = () => sendSpeed(parseFloat($('testSpd').value)||0);
+$('btnWalk').onclick = () => sendSpeed(3.0);
+
+/* ================= treadmill data (2ACD) ================= */
+function onTreadmillData(e){
+  const dv = e.target.value;
+  const kmh = dv.getUint16(2,true)/100;
+  $('spd').innerHTML = `${kmh.toFixed(2)}<small>km/h</small>`;
+  $('pace').textContent = paceStr(kmh);
+  $('mph').textContent = (kmh*0.621371).toFixed(1);
+}
+
+/* ================= workout builder ================= */
+const DEFAULT = [ {kmh:4.0,sec:120},{kmh:6.0,sec:60},{kmh:4.0,sec:120} ];
+function renderTable(){
+  const tb=$('tbody'); tb.innerHTML='';
+  workout.forEach((iv,i)=>{
+    const tr=document.createElement('tr'); tr.dataset.i=i;
+    tr.innerHTML = `<td class="pace">${i+1}</td>
+      <td><input type="number" step="0.1" min="0.8" max="27" value="${iv.kmh}" data-f="kmh"></td>
+      <td><input type="text" value="${fmtT(iv.sec)}" data-f="sec"></td>
+      <td class="pace">${paceStr(iv.kmh)}/km</td>
+      <td><button class="del" title="remove">✕</button></td>`;
+    tr.querySelector('[data-f=kmh]').onchange = ev=>{ iv.kmh=parseFloat(ev.target.value)||0; renderTable(); };
+    tr.querySelector('[data-f=sec]').onchange = ev=>{
+      const m=ev.target.value.match(/^(\d+):(\d{1,2})$/);
+      iv.sec = m ? (+m[1])*60+(+m[2]) : (parseInt(ev.target.value)||0);
+      renderTable(); };
+    tr.querySelector('.del').onclick = ()=>{ workout.splice(i,1); renderTable(); };
+    tb.appendChild(tr);
+  });
+  const tot=workout.reduce((a,b)=>a+b.sec,0);
+  const dist=workout.reduce((a,b)=>a+b.kmh*b.sec/3600,0);
+  $('totals').textContent = `${workout.length} intervals · ${fmtT(tot)} · ~${dist.toFixed(2)} km`;
+}
+$('btnAdd').onclick = ()=>{ workout.push({kmh:5.0,sec:60}); renderTable(); };
+workout = JSON.parse(JSON.stringify(DEFAULT)); renderTable();
+
+/* ================= workout runner ================= */
+$('btnStart').onclick = async ()=>{
+  if(!workout.length) return;
+  runState = { idx:0, remain:workout[0].sec, total:workout.reduce((a,b)=>a+b.sec,0), elapsed:0 };
+  $('btnStart').style.display='none'; $('btnStop').style.display='inline-block';
+  $('runner').style.display='block';
+  markRow(0);
+  log('ev',`workout start — interval 1: ${workout[0].kmh} km/h`);
+  await sendSpeed(workout[0].kmh);
+  runTimer = setInterval(tick, 1000);
+};
+function tick(){
+  const rs=runState; if(!rs) return;
+  rs.remain--; rs.elapsed++;
+  if(rs.remain<=0){
+    rs.idx++;
+    if(rs.idx>=workout.length){ finishWorkout(); return; }
+    rs.remain=workout[rs.idx].sec;
+    markRow(rs.idx);
+    log('ev',`interval ${rs.idx+1}: ${workout[rs.idx].kmh} km/h`);
+    sendSpeed(workout[rs.idx].kmh);
+  }
+  $('cd').textContent = fmtT(rs.remain);
+  $('barFill').style.width = (rs.elapsed/rs.total*100)+'%';
+  const nxt = workout[rs.idx+1];
+  $('next').textContent = nxt ? `next: ${nxt.kmh} km/h (${paceStr(nxt.kmh)}/km) for ${fmtT(nxt.sec)}` : 'last interval';
+}
+function markRow(i){
+  document.querySelectorAll('#tbody tr').forEach((tr,j)=>{
+    tr.className = j<i ? 'done' : j===i ? 'active' : '';
+  });
+}
+function finishWorkout(){
+  stopWorkout(false);
+  log('ev','workout complete — dropping to 3.0 km/h walk');
+  sendSpeed(3.0);
+}
+function stopWorkout(sendWalk=true){
+  clearInterval(runTimer); runTimer=null; runState=null;
+  $('btnStart').style.display='inline-block'; $('btnStop').style.display='none';
+  $('runner').style.display='none';
+  document.querySelectorAll('#tbody tr').forEach(tr=>tr.className='');
+  if(sendWalk && cmdChar){ log('ev','stopped — dropping to 3.0 km/h'); sendSpeed(3.0); }
+}
+$('btnStop').onclick = ()=>stopWorkout(true);
+
+/* ================= misc ================= */
+$('btnCopy').onclick = ()=>{
+  navigator.clipboard.writeText($('log').innerText);
+  $('btnCopy').textContent='copied'; setTimeout(()=>$('btnCopy').textContent='copy',1200);
+};
+if(!navigator.bluetooth){
+  log('er','Web Bluetooth not available in this browser/context. Use desktop Chrome or Bluefy over HTTPS.');
+}
+</script>
+</body>
+</html>
