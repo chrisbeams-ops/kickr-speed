@@ -76,6 +76,12 @@
      5 on a wide screen — 15 buttons divide evenly into both, so no stray row. */
   .grade-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(clamp(72px,18vw,112px),1fr));
     gap:clamp(6px,1.4vw,12px);width:100%}
+
+  /* Fill the panel rather than leaving dead space below the weight row: the
+     grade section takes the slack and its rows share it equally. */
+  #panel-control .ctrl-section.wide{flex:1;min-height:0}
+  #panel-control .grade-grid{flex:1;grid-auto-rows:1fr}
+  #panel-control .grade-btn{padding:0;min-height:44px}
   .grade-btn{font-family:"JetBrains Mono",monospace;font-size:clamp(14px,3.6vw,24px);font-weight:700;color:var(--text);background:var(--border);border:2px solid transparent;border-radius:12px;padding:clamp(12px,2.2vh,24px) 0;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.1s,color 0.1s,border-color 0.1s;text-align:center}
   .grade-btn:active{background:var(--accent);color:var(--bg)}
   .grade-btn.active{border-color:var(--accent);color:var(--accent)}
