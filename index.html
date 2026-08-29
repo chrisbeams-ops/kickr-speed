@@ -155,6 +155,7 @@
   <p>Connect to your treadmill to see speed, pace, distance, grade and cadence — and control speed and incline.</p>
   <button class="cbtn" id="cb">Connect</button>
   <div class="err" id="err" style="display:none"></div>
+  <button class="dc-btn" id="cb-basic" style="display:none" onclick="doConnect(true)">Connect without speed control</button>
   <div class="popup-row" id="popupRow">
     <span style="font-size:10px;color:#3a3a42">or</span>
     <button class="popup-btn" onclick="launchPopup(120,500)">Launch as slim panel</button>
@@ -303,11 +304,14 @@ var RSC = 0x1814, RSC_MEAS = 0x2A53;
 // a026e002 looks identical in its properties but is a debug stream that
 // silently swallows writes — match this UUID exactly.
 var WAHOO_CMD = "a026e03e-0a7d-4ab3-97fa-f1500f9feb8b";
-var WAHOO_SERVICES = [];
-for (var wi = 1; wi <= 20; wi++) {
-  WAHOO_SERVICES.push("a026ee" + (wi < 16 ? "0" : "") + wi.toString(16) +
-                      "-0a7d-4ab3-97fa-f1500f9feb8b");
-}
+// Only the three services this machine actually has, per a full GATT dump.
+// Asking for twenty speculative UUIDs upsets Bluefy on iOS.
+var WAHOO_CMD_SVC = "a026ee0e-0a7d-4ab3-97fa-f1500f9feb8b";   // holds a026e03e
+var WAHOO_SERVICES = [
+  "a026ee01-0a7d-4ab3-97fa-f1500f9feb8b",
+  "a026ee06-0a7d-4ab3-97fa-f1500f9feb8b",
+  WAHOO_CMD_SVC
+];
 
 var dev = null, st = null, ti = null, cpChar = null, hasControl = false;
 var wahooChar = null, wahooId = null, wahooUnlocked = false, wahooFirstSend = false;
@@ -329,18 +333,23 @@ if (!navigator.bluetooth) {
   er.style.display = "block";
 }
 
-// Connect
-cb.addEventListener("click", async function() {
+// Connect. `basic` omits optionalServices, which is the original pre-speed-control
+// request — kept as an escape hatch because some iOS Web Bluetooth browsers refuse
+// the fuller one. Retrying automatically is not possible: requestDevice needs a
+// fresh user gesture, so this is offered as its own button.
+cb.addEventListener("click", function() { doConnect(false); });
+
+async function doConnect(basic) {
   er.style.display = "none";
+  document.getElementById("cb-basic").style.display = "none";
   cb.textContent = "Connecting...";
   cb.disabled = true;
   try {
-    // The Wahoo services must be declared here or getPrimaryServices() will not
-    // return them, and speed control is unreachable.
-    dev = await navigator.bluetooth.requestDevice({
-      filters: [{ services: [FTMS] }],
-      optionalServices: [FTMS, RSC].concat(WAHOO_SERVICES)
-    });
+    // The Wahoo services must be declared here or they cannot be discovered,
+    // and speed control is unreachable.
+    var opts = { filters: [{ services: [FTMS] }] };
+    if (!basic) opts.optionalServices = [FTMS, RSC].concat(WAHOO_SERVICES);
+    dev = await navigator.bluetooth.requestDevice(opts);
     dev.addEventListener("gattserverdisconnected", onDC);
     var srv = await dev.gatt.connect();
     var svc = await srv.getPrimaryService(FTMS);
@@ -365,8 +374,9 @@ cb.addEventListener("click", async function() {
     er.style.display = "block";
     cb.textContent = "Connect";
     cb.disabled = false;
+    if (!basic) document.getElementById("cb-basic").style.display = "block";
   }
-});
+}
 
 // Parse FTMS treadmill data
 function onD(e) {
@@ -558,28 +568,42 @@ async function writeWahoo(bytes) {
 }
 
 async function tryWahoo(srv) {
+  // Go straight to the known service first. Bluefy on iOS is unreliable with
+  // getPrimaryServices(), so only fall back to enumerating if the direct
+  // lookup fails.
   try {
-    var services = await srv.getPrimaryServices();
-    for (var i = 0; i < services.length; i++) {
-      var chars = [];
-      try { chars = await services[i].getCharacteristics(); } catch (x) { continue; }
-      for (var j = 0; j < chars.length; j++) {
-        if (chars[j].uuid === WAHOO_CMD) {
-          wahooChar = chars[j];
-          await wahooChar.startNotifications();
-          wahooChar.addEventListener("characteristicvaluechanged", onWahooNotify);
-          setSpeedStatus("starting up…");
-          for (var k = 0, seq = [0x01, 0x10, 0x12, 0x18, 0x80, 0x86, 0xF0]; k < seq.length; k++) {
-            await writeWahoo([seq[k]]);
-            await wahooSleep(120);
-          }
-          return;
+    var svc = await srv.getPrimaryService(WAHOO_CMD_SVC);
+    wahooChar = await svc.getCharacteristic(WAHOO_CMD);
+  } catch (x) {
+    try {
+      var services = await srv.getPrimaryServices();
+      for (var i = 0; i < services.length && !wahooChar; i++) {
+        var chars = [];
+        try { chars = await services[i].getCharacteristics(); } catch (y) { continue; }
+        for (var j = 0; j < chars.length; j++) {
+          if (chars[j].uuid === WAHOO_CMD) { wahooChar = chars[j]; break; }
         }
       }
+    } catch (y) {}
+  }
+
+  if (!wahooChar) {
+    setSpeedStatus("not available — set the belt yourself");
+    return;
+  }
+
+  try {
+    await wahooChar.startNotifications();
+    wahooChar.addEventListener("characteristicvaluechanged", onWahooNotify);
+    setSpeedStatus("starting up…");
+    for (var k = 0, seq = [0x01, 0x10, 0x12, 0x18, 0x80, 0x86, 0xF0]; k < seq.length; k++) {
+      await writeWahoo([seq[k]]);
+      await wahooSleep(120);
     }
-  } catch (x) {}
-  wahooChar = null;
-  setSpeedStatus("no speed control — set the belt yourself");
+  } catch (x) {
+    wahooChar = null;
+    setSpeedStatus("start-up failed: " + (x.message || x));
+  }
 }
 
 function onWahooNotify(e) {
