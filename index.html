@@ -57,8 +57,8 @@
   .mini-lbl{font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-top:2px}
 
   /* ── Control panel ── */
-  .ctrl-stack{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:20px;padding:20px 24px;overflow-y:auto}
-  .ctrl-section{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;max-width:300px}
+  .ctrl-stack{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:clamp(8px,2vh,20px);padding:clamp(10px,2vh,20px) 24px;overflow-y:auto;min-height:0}
+  .ctrl-section{display:flex;flex-direction:column;align-items:center;gap:clamp(6px,1.2vh,10px);width:100%;max-width:300px}
   .ctrl-label{font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--dim)}
   .ctrl-val{font-size:36px;font-weight:800;color:var(--text);line-height:1}
   .ctrl-btns{display:flex;gap:10px;width:100%}
@@ -77,6 +77,12 @@
   .grade-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(clamp(72px,18vw,112px),1fr));
     gap:clamp(6px,1.4vw,12px);width:100%}
 
+  /* Both control panels: the button grid takes the slack, so it fills a tall
+     screen and gives up height on a short one instead of overflowing. */
+  #panel-speed .ctrl-section.wide{flex:1;min-height:0}
+  #panel-speed .speed-grid{flex:1;grid-auto-rows:1fr}
+  #panel-speed .speed-btn{padding:0;min-height:40px}
+
   /* Fill the panel rather than leaving dead space below the weight row: the
      grade section takes the slack and its rows share it equally. */
   #panel-control .ctrl-section.wide{flex:1;min-height:0}
@@ -85,6 +91,17 @@
   .grade-btn{font-family:"JetBrains Mono",monospace;font-size:clamp(14px,3.6vw,24px);font-weight:700;color:var(--text);background:var(--border);border:2px solid transparent;border-radius:12px;padding:clamp(12px,2.2vh,24px) 0;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.1s,color 0.1s,border-color 0.1s;text-align:center}
   .grade-btn:active{background:var(--accent);color:var(--bg)}
   .grade-btn.active{border-color:var(--accent);color:var(--accent)}
+
+  /* Short screens: reclaim height from secondary chrome rather than from the
+     speed buttons, which have to stay big enough to hit while running. */
+  @media (max-height:800px){
+    #panel-speed .ctrl-btn{padding:10px 0;font-size:20px}
+    #panel-speed .belt{display:none}
+  }
+  @media (max-height:620px){
+    #panel-speed .ctrl-label{display:none}
+    #panel-speed .ctrl-note{font-size:8px;line-height:1.3}
+  }
 
   /* ── Paddle prompt — the machine will not change speed until this is obeyed ── */
   #paddle{display:none;position:fixed;top:0;left:0;right:0;z-index:60;
@@ -252,9 +269,8 @@
         <button class="cue-btn" onclick="clearTarget()">Clear target</button>
       </div>
       <div class="ctrl-note">Speed control: <span id="speed-status" style="color:var(--dim)">not connected</span></div>
-      <div class="ctrl-note">Tap a speed, then tap the paddle when prompted and the belt goes there.
-        The paddle tap is the treadmill's own safety step and cannot be skipped. The physical
-        stop button and paddles always override the app.</div>
+      <div class="ctrl-note">Tap a speed, then tap the paddle when prompted.
+        The physical stop button always overrides the app.</div>
     </div>
   </div>
 </div>
